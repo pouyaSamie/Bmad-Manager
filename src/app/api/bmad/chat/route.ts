@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
 import fs from "node:fs/promises";
+import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { getAuthenticatedSession } from "@/lib/db/helpers";
 import { getGatewayForChat } from "@/actions/bmad-control-actions";
@@ -20,24 +20,27 @@ export async function POST(request: NextRequest) {
   if (!session) return Response.json({ error: "Not authenticated" }, { status: 401 });
   const repo = await prisma.repo.findFirst({ where: { userId: session.userId, owner: parsed.data.owner, name: parsed.data.name, sourceType: "local" }, select: { id: true, localPath: true } });
   if (!repo?.localPath) return Response.json({ error: "Local project not found" }, { status: 404 });
-  const gateway = await getGatewayForChat(repo.id, session.userId);
-  if (!gateway) return Response.json({ error: "Configure a gateway API key and model before chatting" }, { status: 409 });
-  const agent = gateway.runtime.agents.find((item) => item.id === parsed.data.agentId);
-  if (!agent) return Response.json({ error: "Agent not found" }, { status: 404 });
+
+  const gateway = await getGatewayForChat(repo.id, session.userId, parsed.data.agentId);
+  if (!gateway) return Response.json({ error: "Configure a project gateway or an agent-specific provider and model before chatting" }, { status: 409 });
+  const agent = gateway.agent;
   const conversation = parsed.data.conversationId
     ? await prisma.bmadConversation.findFirst({ where: { id: parsed.data.conversationId, runtimeId: gateway.runtime.id } })
     : await prisma.bmadConversation.create({ data: { runtimeId: gateway.runtime.id, agentId: agent.id, title: parsed.data.message.slice(0, 72) } });
   if (!conversation) return Response.json({ error: "Conversation not found" }, { status: 404 });
+
   await prisma.bmadMessage.create({ data: { conversationId: conversation.id, role: "user", content: parsed.data.message } });
   const skill = agent.skillName ? await prisma.bmadSkill.findFirst({ where: { runtimeId: gateway.runtime.id, name: agent.skillName } }) : null;
   const skillContent = skill ? await fs.readFile(safeChild(repo.localPath, `${skill.directory}/SKILL.md`), "utf8").catch(() => "") : "";
   const history = await prisma.bmadMessage.findMany({ where: { conversationId: conversation.id }, orderBy: { createdAt: "asc" }, take: 40 });
-  const system = `You are ${agent.name}, ${agent.title}. ${agent.description ?? ""}\n\nConfigured persona:\n${typeof agent.persona === "string" ? agent.persona : "No additional project persona override."}\n\nAttached skill:\n${skillContent.slice(0, 24000)}\n\nYou are inside MyBMAD. You may inspect and explain BMad configuration, but you cannot write files or run commands. When a change is needed, describe the exact approved operation the user should draft. Keep the configured persona.`;
-  const endpoint = `${gateway.runtime.gatewayBaseUrl!.replace(/\/$/, "")}/chat/completions`;
-  const upstream = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${gateway.apiKey}` }, body: JSON.stringify({ model: gateway.runtime.gatewayModel, stream: true, messages: [{ role: "system", content: system }, ...history.map((item) => ({ role: item.role === "assistant" ? "assistant" : "user", content: item.content }))] }) });
-  if (!upstream.ok || !upstream.body) return Response.json({ error: "Gateway request failed" }, { status: 502 });
+  const system = `You are ${agent.name}, ${agent.title}. ${agent.description ?? ""}\n\nConfigured persona:\n${typeof agent.persona === "string" ? agent.persona : "No additional project persona override."}\n\nAttached skill:\n${skillContent.slice(0, 24000)}\n\nYou are inside BmadManager. You may inspect and explain BMad configuration, but you cannot write files or run commands. When a change is needed, describe the exact approved operation the user should draft. Keep the configured persona.`;
+  const endpoint = `${gateway.gatewayBaseUrl.replace(/\/$/, "")}/chat/completions`;
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (gateway.apiKey) headers.authorization = `Bearer ${gateway.apiKey}`;
+  const upstream = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify({ model: gateway.gatewayModel, stream: true, messages: [{ role: "system", content: system }, ...history.map((item) => ({ role: item.role === "assistant" ? "assistant" : "user", content: item.content }))] }) });
+  if (!upstream.ok || !upstream.body) return Response.json({ error: `Gateway request failed for ${gateway.providerLabel}` }, { status: 502 });
+
   const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
   let answer = "";
   const stream = new ReadableStream({
     async start(controller) {

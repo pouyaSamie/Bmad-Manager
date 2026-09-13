@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import fs from "node:fs/promises";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
+import type { Prisma } from "@/generated/prisma/client";
 import { getAuthenticatedSession } from "@/lib/db/helpers";
 import { sanitizeError } from "@/lib/errors";
 import { decryptSecret, discoverBmad, encryptSecret, safeChild, validCustomPath, validSkillSlug } from "@/lib/bmad-control";
@@ -145,7 +146,7 @@ export async function draftBmadOperation(input: z.infer<typeof operationSchema>)
   }
   try {
     const runtime = await runtimeFor(result.repo.id);
-    const operation = await prisma.bmadOperation.create({ data: { runtimeId: runtime.id, kind: parsed.data.kind, payload: payload as any, preview: preview(parsed.data.kind, payload) as any, createdById: result.session.userId } });
+    const operation = await prisma.bmadOperation.create({ data: { runtimeId: runtime.id, kind: parsed.data.kind, payload: payload as Prisma.InputJsonValue, preview: preview(parsed.data.kind, payload) as Prisma.InputJsonValue, createdById: result.session.userId } });
     revalidatePath(`/repo/${parsed.data.owner}/${parsed.data.name}/control`);
     return { success: true, data: { id: operation.id } };
   } catch (error) { return { success: false, error: sanitizeError(error, "DB_ERROR"), code: "OPERATION_CREATE_FAILED" }; }
