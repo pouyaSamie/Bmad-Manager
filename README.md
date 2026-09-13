@@ -1,230 +1,132 @@
-# MyBMAD Dashboard
+# Bmad Manager
 
-A web dashboard - https://mybmad.hichem.cloud/ - to visualize and track [BMAD (Breakthrough Method of Agile AI-Driven Development)](https://github.com/bmad-method/bmad-method) projects from your GitHub repositories — or directly from local folders.
+> A self-hosted workspace for understanding, tracking, and safely operating [BMad](https://github.com/bmad-method/bmad-method) projects.
 
-> **License:** MIT — see [LICENSE](./LICENSE) for details.
+Bmad Manager turns the planning artifacts already in a BMad project into a practical dashboard. Connect a GitHub repository or a local folder to see epics, stories, sprint progress, and documentation in one place. For local projects, the built-in BMad Control area can discover installed agents and skills, then queue approved, allowlisted maintenance operations for a separate worker.
 
----
+![Bmad Manager dashboard](./docs/screen1.png)
 
-## Table of Contents
+## Highlights
 
-- [What is MyBMAD Dashboard?](#what-is-mybmad-dashboard)
-- [Tech Stack](#tech-stack)
-- [Quick Start](#quick-start)
-- [Project Structure](#project-structure)
-- [Available Scripts](#available-scripts)
-- [Production Deployment](#production-deployment-docker)
-- [Epic and Story Naming](#epic-and-story-naming)
-- [Documentation](#documentation)
-- [Contributing](#contributing)
-- [License](#license)
+- Import BMad projects from GitHub or, in self-hosted environments, directly from local folders.
+- Track epics, stories, sprint status, velocity, and supporting planning documents.
+- Read both a single `epics.md` file and split epic files in an `epics/` directory.
+- Browse BMad documentation without leaving the dashboard.
+- Manage branch selection per repository.
+- Authenticate with email/password, with optional GitHub OAuth.
+- Run multi-user installations with user roles.
+- Use **BMad Control** for local projects to discover agents and skills, review changes, and process approved operations through a dedicated worker.
+- Deploy with Docker, PostgreSQL, and Traefik.
 
----
+## Screenshots
 
-## What is MyBMAD Dashboard?
+| Project overview | Epic tracking |
+| --- | --- |
+| ![Project overview](./docs/screen2.png) | ![Epic tracking](./docs/screen3.png) |
 
-MyBMAD Dashboard connects to your GitHub repositories (or local folders), reads the BMAD project structure (epics, stories, sprint status, docs), and displays everything in a clean, real-time dashboard. It is designed for solo developers and small teams who use the BMAD methodology with AI coding agents.
+| Story board | Documentation browser |
+| --- | --- |
+| ![Story board](./docs/screen4.png) | ![Documentation browser](./docs/screen5.png) |
 
-**Key features:**
-- Import any GitHub repository that follows the BMAD structure
-- **Import local folders** — no GitHub needed for self-hosted setups ([learn more](./docs/LOCAL_FOLDER.md))
-- Visualize epic progress and story status at a glance
-- Support for chunked epics (individual files in `epics/` directory) as well as a single `epics.md`
-- Browse BMAD docs and planning artifacts directly in the app
-- Track sprint status and velocity metrics
-- Repo settings modal to switch branches directly from the UI
-- Email/password authentication and optional GitHub OAuth login
-- Multi-user support with role management (admin / user)
-- Self-hostable with Docker and automatic TLS via Traefik
+## Stack
 
----
+| Area | Technology |
+| --- | --- |
+| Application | Next.js 16, React 19, TypeScript |
+| UI | Tailwind CSS v4, shadcn/ui |
+| Data | PostgreSQL, Prisma |
+| Authentication | Better Auth |
+| Repository access | GitHub API via Octokit |
+| Testing | Vitest |
+| Deployment | Docker and Traefik |
 
-<img width="1720" alt="Screenshot 1" src="./docs/screen1.png" />
-<img width="1720" alt="Screenshot 2" src="./docs/screen2.png" />
-<img width="1720" alt="Screenshot 3" src="./docs/screen3.png" />
-<img width="1720" alt="Screenshot 4" src="./docs/screen4.png" />
-<img width="1720" alt="Screenshot 5" src="./docs/screen5.png" />
-<img width="1720" alt="Screenshot 6" src="./docs/screen6.png" />
-<img width="1720" alt="Screenshot 7" src="./docs/screen7.png" />
-<img width="1720" alt="Screenshot 8" src="./docs/screen8.png" />
+## Quick start
 
+### Requirements
 
-## Tech Stack
+- Node.js 20 or later
+- pnpm 9 or later
+- Docker and Docker Compose (for the included PostgreSQL service)
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | [Next.js 16](https://nextjs.org) (App Router) |
-| Language | TypeScript |
-| Database | PostgreSQL + [Prisma](https://prisma.io) |
-| Auth | [Better Auth](https://better-auth.com) (email/password + GitHub OAuth) |
-| GitHub API | [@octokit/rest](https://github.com/octokit/rest.js) |
-| UI | React 19 + Tailwind CSS v4 + shadcn/ui |
-| Deployment | Docker + Traefik (automatic TLS) |
-| Tests | [Vitest](https://vitest.dev) |
-
----
-
-## Quick Start
-
-> Full guide with all environment variables explained: **[docs/GETTING_STARTED.md](./docs/GETTING_STARTED.md)**
+### Run locally
 
 ```bash
-git clone https://github.com/DevHDI/my-bmad.git
-cd my-bmad
+git clone https://github.com/pouyaSamie/Bmad-Manager.git
+cd Bmad-Manager
 pnpm install
 
-# Auto-generate .env with secrets
-bash scripts/setup.sh
-
-# Start PostgreSQL
+# Copy .env.example to .env and fill in the required values.
 docker compose up -d
-
-# Run migrations & create admin
 pnpm db:migrate
-pnpm db:create-admin --email you@example.com --password your_password --name Admin
-
-# Start dev server
+pnpm db:create-admin --email you@example.com --password your-password --name Admin
 pnpm dev
 ```
 
-Open [http://localhost:3002](http://localhost:3002) and log in.
+Open [http://localhost:3002](http://localhost:3002), sign in, and add a GitHub repository or local BMad folder.
 
----
+For a full description of the environment variables, see [Getting Started](./docs/GETTING_STARTED.md).
 
-## Project Structure
+### BMad Control worker
 
-```
-my-bmad/
-├── src/
-│   ├── app/                    # Next.js App Router pages and API routes
-│   │   ├── (dashboard)/        # Authenticated dashboard pages
-│   │   │   ├── page.tsx        # Home — projects overview
-│   │   │   ├── repo/           # Per-repository views (epics, stories, docs)
-│   │   │   ├── admin/          # Admin panel (user management)
-│   │   │   └── profile/        # User profile
-│   │   ├── api/
-│   │   │   ├── auth/           # Better Auth handler
-│   │   │   ├── health/         # Health check endpoint
-│   │   │   └── revalidate/     # Cache revalidation webhook
-│   │   └── login/              # Login page
-│   ├── components/             # React components
-│   │   ├── dashboard/          # Dashboard-specific components
-│   │   ├── docs/               # Markdown/doc viewer components
-│   │   ├── epics/              # Epics & stories components
-│   │   ├── layout/             # Sidebar, header, nav
-│   │   └── ui/                 # shadcn/ui base components
-│   ├── lib/
-│   │   ├── auth/               # Better Auth configuration
-│   │   ├── bmad/               # BMAD parser (reads repo structure)
-│   │   ├── db/                 # Prisma client and helpers
-│   │   └── github/             # Octokit client with retry/throttle
-│   └── actions/                # Next.js Server Actions
-├── prisma/
-│   ├── schema.prisma           # Database schema
-│   └── migrations/             # Migration history
-├── docker/
-│   ├── docker-compose.prod.yml # Production Docker Compose
-│   └── DEPLOY.md               # Production deployment guide
-├── docs/                       # Documentation
-├── _bmad/                      # BMAD methodology system (used to build this app)
-└── _bmad-output/               # Planning artifacts generated during development
-```
+BMad Control is available for imported local projects. It uses encrypted gateway credentials and a dedicated worker, so the web application does not execute queued operations itself.
 
----
-
-## Available Scripts
+Add a stable 32-byte base64url `AGENT_ENCRYPTION_KEY` to `.env`, then run the application and worker in separate terminals:
 
 ```bash
-pnpm dev              # Start development server (port 3002)
-pnpm build            # Build for production
-pnpm start            # Start production server
-pnpm lint             # Run ESLint
-pnpm test             # Run tests (Vitest)
-pnpm test:watch       # Run tests in watch mode
-pnpm db:generate      # Generate Prisma client
-pnpm db:migrate       # Run database migrations (dev)
-pnpm db:push          # Push schema changes without migration
-pnpm db:studio        # Open Prisma Studio (database GUI)
-pnpm db:create-admin  # Create an admin user from the CLI
+pnpm dev
+pnpm bmad:worker
 ```
 
----
+Operations are previewed before approval, limited to allowlisted project actions, and recorded with redacted output. Read the [BMad Control guide](./docs/BMAD_CONTROL.md) before enabling it.
 
-## Production Deployment (Docker)
+## Development commands
 
-See the full guide in [`docker/DEPLOY.md`](./docker/DEPLOY.md).
+```bash
+pnpm dev              # Start the development server on port 3002
+pnpm build            # Create a production build
+pnpm start            # Run the production server
+pnpm lint             # Run ESLint
+pnpm test             # Run the Vitest suite
+pnpm test:watch       # Run Vitest in watch mode
+pnpm db:generate      # Generate the Prisma client
+pnpm db:migrate       # Create and apply a development migration
+pnpm db:push          # Push the schema without creating a migration
+pnpm db:studio        # Open Prisma Studio
+pnpm db:create-admin  # Create an administrator account
+pnpm bmad:worker      # Process approved BMad Control operations
+```
 
-**Quick summary:**
+## BMad project conventions
 
-1. Clone the repo on your VPS
-2. Create `.env` and `.env.local` from `.env.example`
-3. Create the external Docker network: `docker network create web`
-4. Launch: `docker compose --env-file .env -f docker/docker-compose.prod.yml up -d`
-5. Run migrations: `docker compose ... exec my-bmad npx prisma migrate deploy`
+Bmad Manager supports numeric and alphanumeric epic identifiers.
 
-The stack includes:
-- **Next.js** application container
-- **PostgreSQL** database
-- **Traefik** reverse proxy with automatic Let's Encrypt TLS
-
----
-
-## Epic and Story Naming
-
-MyBMAD supports numeric IDs and explicit alphanumeric epic/story prefixes.
-
-| Artifact | Example | Parsed ID |
-|----------|---------|-----------|
+| Artifact | Example | Detected ID |
+| --- | --- | --- |
 | Epic heading | `## Epic 1: Foundation` | `1` |
 | Epic heading | `## Epic DevOps/Infra: Pipeline` | `devops-infra` |
 | Epic file | `planning-artifacts/epics/epic-housekeeping.md` | `housekeeping` |
 | Story file | `implementation-artifacts/1-2-setup.md` | `1.2` |
 | Story file | `implementation-artifacts/DI-1-pipeline.md` | `di.1` |
-| Sprint status | `epic-devops-infra: in-progress` | `devops-infra` |
 
-For alphanumeric epic headings, the `Epic` keyword is required so ordinary
-headings like `## Introduction: Overview` are not parsed as epics. When an
-epic ID such as `devops-infra` lists stories like `DI.1`, MyBMAD links those
-stories back to the epic without requiring destructive filtering of unlisted
-story files.
+For alphanumeric epic headings, use the `Epic` keyword so ordinary headings are not mistakenly treated as epics.
 
----
+## Deploying
+
+The included production setup runs the application, PostgreSQL, and Traefik with automatic TLS. Follow the [production deployment guide](./docker/DEPLOY.md) for the required environment variables and commands.
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [Getting Started](./docs/GETTING_STARTED.md) | Full local setup guide with all environment variables |
-| [Local Folder Import](./docs/LOCAL_FOLDER.md) | Import BMAD projects from the filesystem without GitHub |
-| [API Endpoints](./docs/API.md) | REST API reference (revalidation, health check) |
-| [Production Deployment](./docker/DEPLOY.md) | Docker + Traefik deployment guide |
-| [Contributing](./CONTRIBUTING.md) | How to contribute to the project |
-| [Security](./SECURITY.md) | Vulnerability reporting policy |
-
----
+- [Getting Started](./docs/GETTING_STARTED.md) — local setup and configuration
+- [Local Folder Import](./docs/LOCAL_FOLDER.md) — importing projects from the filesystem
+- [BMad Control](./docs/BMAD_CONTROL.md) — controlled local-project operations
+- [API Reference](./docs/API.md) — health and cache-revalidation endpoints
+- [Contributing](./CONTRIBUTING.md) — contribution guidelines
+- [Security](./SECURITY.md) — responsible disclosure policy
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before submitting a pull request.
-
----
-
-## Security
-
-Found a vulnerability? Please read our [SECURITY.md](./SECURITY.md) and report it responsibly.
-
----
+Issues and pull requests are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
-This project is licensed under the **MIT License**.
-
-You are free to use, modify, and distribute this software, including for
-commercial purposes, as long as the original copyright notice is preserved.
-See [LICENSE](./LICENSE) for the full license text.
-
----
-
-## Acknowledgements
-
-Built with the [BMAD Method](https://github.com/bmad-method/bmad-method) — an AI-driven agile development methodology.
+Distributed under the [MIT License](./LICENSE).
