@@ -1,0 +1,209 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  role          String    @default("user")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  accounts      Account[]
+  repos         Repo[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verifications")
+}
+
+model Repo {
+  id            String    @id @default(cuid())
+  owner         String
+  name          String
+  branch        String    @default("main")
+  displayName   String
+  description   String?
+  sourceType    String    @default("github")
+  localPath     String?
+  totalFiles    Int?
+  lastSyncedAt  DateTime?
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bmadRuntime   BmadProjectRuntime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([userId, owner, name])
+  @@index([userId])
+  @@map("repos")
+}
+
+model BmadProjectRuntime {
+  id                  String   @id @default(cuid())
+  repoId              String   @unique
+  repo                Repo     @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  gatewayBaseUrl      String?
+  gatewayModel        String?
+  encryptedGatewayKey String?
+  installedVersion    String?
+  installStatus       String   @default("not_scanned")
+  tools               Json?
+  modules             Json?
+  workflow            Json?
+  lastScannedAt       DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  agents              BmadAgent[]
+  skills              BmadSkill[]
+  conversations       BmadConversation[]
+  operations          BmadOperation[]
+
+  @@map("bmad_project_runtimes")
+}
+
+model BmadAgent {
+  id            String   @id @default(cuid())
+  runtimeId     String
+  runtime       BmadProjectRuntime @relation(fields: [runtimeId], references: [id], onDelete: Cascade)
+  slug          String
+  skillName     String?
+  name          String
+  title         String
+  icon          String   @default("🤖")
+  description   String?
+  persona       Json?
+  providerLabel String?
+  gatewayBaseUrl String?
+  gatewayModel  String?
+  encryptedGatewayKey String?
+  source        String   @default("discovered")
+  scope         String   @default("team")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  conversations BmadConversation[]
+
+  @@unique([runtimeId, slug])
+  @@map("bmad_agents")
+}
+
+model BmadSkill {
+  id              String   @id @default(cuid())
+  runtimeId       String
+  runtime         BmadProjectRuntime @relation(fields: [runtimeId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  directory       String
+  source          String   @default("installed")
+  isManaged       Boolean  @default(false)
+  customizeSchema String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([runtimeId, name])
+  @@map("bmad_skills")
+}
+
+model BmadConversation {
+  id        String   @id @default(cuid())
+  runtimeId String
+  runtime   BmadProjectRuntime @relation(fields: [runtimeId], references: [id], onDelete: Cascade)
+  agentId   String?
+  agent     BmadAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  title     String   @default("New conversation")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages  BmadMessage[]
+
+  @@index([runtimeId, updatedAt])
+  @@map("bmad_conversations")
+}
+
+model BmadMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   BmadConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  proposals      Json?
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("bmad_messages")
+}
+
+model BmadOperation {
+  id           String   @id @default(cuid())
+  runtimeId    String
+  runtime      BmadProjectRuntime @relation(fields: [runtimeId], references: [id], onDelete: Cascade)
+  kind         String
+  status       String   @default("draft")
+  payload      Json
+  preview      Json?
+  output       String?
+  error        String?
+  createdById  String
+  approvedById String?
+  approvedAt   DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([runtimeId, status, createdAt])
+  @@map("bmad_operations")
+}

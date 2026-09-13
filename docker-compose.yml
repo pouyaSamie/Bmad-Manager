@@ -1,0 +1,28 @@
+# Development Docker Compose — PostgreSQL only
+# For production with Traefik and HTTPS, use: docker compose -f docker/docker-compose.prod.yml up -d
+
+services:
+  postgres:
+    image: postgres:17.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bmad_dashboard
+      POSTGRES_USER: bmad
+      POSTGRES_PASSWORD: bmad_dev_password
+    ports:
+      # DEV ONLY: exposed on host for Prisma Studio/CLI. In production, remove this
+      # section and let services communicate over the internal Docker network only.
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bmad -d bmad_dashboard"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
+# NOTE: In development, run the app with `pnpm dev` (hot reload, fast refresh).
+# This file only provides PostgreSQL. For production, see docker/docker-compose.prod.yml.
+
+volumes:
+  postgres_data:

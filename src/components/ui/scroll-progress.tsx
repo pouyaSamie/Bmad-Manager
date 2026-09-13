@@ -1,0 +1,49 @@
+"use client";
+
+import { useEffect, useRef, useState, startTransition } from "react";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { motion, useScroll, useSpring, useMotionValueEvent } from "motion/react";
+
+interface ScrollProgressProps {
+  className?: string;
+}
+
+export function ScrollProgress({ className }: ScrollProgressProps) {
+  const pathname = usePathname();
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, {
+    stiffness: 200,
+    damping: 50,
+    restDelta: 0.001,
+  });
+  const [visible, setVisible] = useState(false);
+
+  // Reset on route change
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    window.scrollTo(0, 0);
+    scaleX.set(0);
+    startTransition(() => setVisible(false));
+  }, [pathname, scaleX]);
+
+  // Only show when user has actually scrolled
+  useMotionValueEvent(scrollYProgress, "change", (v) => {
+    const isScrollable = document.documentElement.scrollHeight > window.innerHeight + 1;
+    setVisible(isScrollable && v > 0.01);
+  });
+
+  return (
+    <motion.div
+      className={cn(
+        "absolute bottom-0 left-0 right-0 h-0.5 origin-left bg-primary",
+        className,
+      )}
+      style={{ scaleX, opacity: visible ? 1 : 0 }}
+    />
+  );
+}

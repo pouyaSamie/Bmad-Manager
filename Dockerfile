@@ -1,0 +1,60 @@
+# Dockerfile — my-bmad
+# Note : reste a la racine (et non docker/Dockerfile) pour simplifier le build context
+FROM node:20-alpine AS base
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@10.28.1 --activate
+
+# --- Dependencies ---
+FROM base AS deps
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY prisma ./prisma
+RUN pnpm install --frozen-lockfile
+
+# --- Build ---
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+# Valeurs factices pour le build uniquement (disparaissent apres le build)
+# Evite les warnings Better Auth et Prisma pendant next build
+ARG DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
+ARG BETTER_AUTH_SECRET="build-time-placeholder-secret-not-used-at-runtime"
+ARG BETTER_AUTH_URL="http://localhost:3000"
+RUN pnpm db:generate
+RUN pnpm build
+
+# --- Runner ---
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copie explicite du client Prisma genere (le tracing standalone peut manquer les chemins custom)
+COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
+# Prisma schema + migrations for runtime migrate deploy
+# Note: prisma.config.ts is NOT copied — it imports dotenv which isn't needed in production
+# (env vars are injected by Docker). Without it, Prisma uses default schema discovery.
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+# Prisma CLI for runtime migrations — installed globally to avoid pnpm symlink issues
+RUN npm install -g prisma@6.19.2
+
+USER nextjs
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["sh", "-c", "prisma migrate deploy && node server.js"]
