@@ -124,6 +124,24 @@ For local projects, open **BMad Control** to inspect and manage your project run
 - **Configurable Feedback Loops:** Define review channels (e.g. Nella's PO verdicts → John for story iteration, Murat's test findings → John for triage) persisted in `_bmad/custom/workflow.toml`.
 - **Safe Execution Surface:** Draft operations to preview CLI commands, approve them after review, and let the background worker (`pnpm bmad:worker`) process them safely.
 
+### 6. Customize Agents, Skills, and Delivery Workflows
+
+BMad Manager provides a complete, visual implementation of the official [BMad Method Customization specification](https://docs.bmad-method.org/customize/customize-bmad/):
+
+- **Customize an Agent:** In the **Agents** tab, click **Customize** on any agent (e.g. Mary, John, Amelia, Murat, Nella) to adjust name, title, emoji icon, identity statement, communication style, principles, persistent facts, activation hooks, or menu actions. Choose between **Team Scope** (`_bmad/custom/<agent>.toml` or `_bmad/custom/config.toml`, committed to git) and **Personal Scope** (`.user.toml`, gitignored for private developer preferences).
+- **Customize & Clone Skills:** Shipped vendor skills in `.agents/skills/` are protected and read-only. In the **Skills** tab, click **Clone** to create a project-owned copy in `.agents/skills/<slug>/SKILL.md` that you can freely edit, or click **New managed skill** to author custom skills from scratch.
+- **Assign Skills to Agents:** Connect an agent to a specific skill directly from either interface:
+  - From **Agents** → **Customize**, select any installed or cloned skill from the **Assigned Skill** dropdown.
+  - From **Skills** → **Clone**, select an agent from the **Assign to agent** dropdown.
+  - When creating a new agent in **New managed agent**, pick an existing skill or let BMad Manager auto-scaffold a matching portable skill.
+  - This persists `skill = "<skill_name>"` in `_bmad/custom/config.toml`, ensuring the agent dispatches that skill upon activation.
+- **Add Agents to the Delivery Workflow:**
+  1. Open the **Overview** (Workflow) tab.
+  2. In the **Add an agent to the workflow…** selector, choose any candidate, customized, or newly created agent and click **Add to pipeline**.
+  3. Drag and drop the agent card (or use the arrow buttons) to reposition it anywhere in the delivery progression (e.g. placing a Security Reviewer between Dev and QA).
+  4. Configure feedback loops (e.g. routing QA findings or critic verdicts to the PM or custom agent).
+  5. Click **Save Workflow Sequence & Loops**, review the drafted changes in **Activity & approvals**, and approve. The background worker writes `_bmad/custom/workflow.toml`.
+
 ### Run the BMad Control worker
 
 BMad Control is available for imported local projects. It uses encrypted gateway credentials and a dedicated worker, so the web application does not execute queued operations itself.

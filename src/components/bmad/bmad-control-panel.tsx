@@ -185,7 +185,7 @@ export function BmadControlPanel({ owner, name }: Props) {
   const [message, setMessage] = useState("");
   const [chat, setChat] = useState<{ role: string; content: string }[]>([]);
   const [tools, setTools] = useState("codex");
-  const [agentDraft, setAgentDraft] = useState({ slug: "", name: "", title: "", icon: "🤖", description: "", persona: "", scope: "team" });
+  const [agentDraft, setAgentDraft] = useState({ slug: "", name: "", title: "", icon: "🤖", description: "", persona: "", scope: "team", skillName: "" });
   const [skillDraft, setSkillDraft] = useState({ slug: "", name: "", description: "", persona: "" });
   const [editingAgent, setEditingAgent] = useState<any>(null);
   const [editingGateway, setEditingGateway] = useState<any>(null);
@@ -797,14 +797,32 @@ export function BmadControlPanel({ owner, name }: Props) {
                     <Button size="sm" variant="ghost" onClick={() => setEditingAgent(null)}>Close</Button>
                   </div>
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <Input value={editingAgent.name} onChange={(event) => setEditingAgent({ ...editingAgent, name: event.target.value })} placeholder="Name" />
-                    <Input value={editingAgent.title} onChange={(event) => setEditingAgent({ ...editingAgent, title: event.target.value })} placeholder="Title" />
-                    <Input value={editingAgent.icon} onChange={(event) => setEditingAgent({ ...editingAgent, icon: event.target.value })} placeholder="Icon" />
-                    <select className="h-9 rounded-md border bg-background px-3 text-sm" value={editingAgent.skillName} onChange={(event) => setEditingAgent({ ...editingAgent, skillName: event.target.value })}>
-                      {skills.map((skill: any) => <option key={skill.id} value={skill.name}>{skill.name}</option>)}
-                    </select>
-                    <Textarea className="min-h-24 md:col-span-2" value={editingAgent.description || ""} onChange={(event) => setEditingAgent({ ...editingAgent, description: event.target.value })} placeholder="Identity and communication style" />
-                    <Textarea className="min-h-40 md:col-span-2" value={editingAgent.persona || ""} onChange={(event) => setEditingAgent({ ...editingAgent, persona: event.target.value })} placeholder="Persona, principles, persistent facts, activation hooks, and menu actions" />
+                    <div>
+                      <label className="text-xs font-medium text-foreground block mb-1">Agent Name</label>
+                      <Input value={editingAgent.name} onChange={(event) => setEditingAgent({ ...editingAgent, name: event.target.value })} placeholder="Name" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-foreground block mb-1">Role / Title</label>
+                      <Input value={editingAgent.title} onChange={(event) => setEditingAgent({ ...editingAgent, title: event.target.value })} placeholder="Title" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-foreground block mb-1">Icon / Emoji</label>
+                      <Input value={editingAgent.icon} onChange={(event) => setEditingAgent({ ...editingAgent, icon: event.target.value })} placeholder="Icon" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-foreground block mb-1">Assigned Skill (dispatched by agent)</label>
+                      <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={editingAgent.skillName} onChange={(event) => setEditingAgent({ ...editingAgent, skillName: event.target.value })}>
+                        {skills.map((skill: any) => <option key={skill.id} value={skill.name}>{skill.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-medium text-foreground block mb-1">Identity & Communication Style</label>
+                      <Textarea className="min-h-24" value={editingAgent.description || ""} onChange={(event) => setEditingAgent({ ...editingAgent, description: event.target.value })} placeholder="Identity and communication style" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-medium text-foreground block mb-1">Persona, Principles, Persistent Facts & Activation Hooks</label>
+                      <Textarea className="min-h-40 font-mono text-xs" value={editingAgent.persona || ""} onChange={(event) => setEditingAgent({ ...editingAgent, persona: event.target.value })} placeholder="Persona, principles, persistent facts, activation hooks, and menu actions" />
+                    </div>
                   </div>
                   <label className="mt-3 flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={editingAgent.scope === "personal"} onChange={(event) => setEditingAgent({ ...editingAgent, scope: event.target.checked ? "personal" : "team" })} />
@@ -821,12 +839,46 @@ export function BmadControlPanel({ owner, name }: Props) {
             <h2 className="font-semibold">New managed agent</h2>
             <p className="mt-1 text-sm text-muted-foreground">Creates a project chat persona plus a portable skill after review and approval. BMM defaults stay unchanged.</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <Input value={agentDraft.slug} onChange={(event) => setAgentDraft({ ...agentDraft, slug: event.target.value })} placeholder="Skill slug, e.g. security-reviewer" />
-              <Input value={agentDraft.name} onChange={(event) => setAgentDraft({ ...agentDraft, name: event.target.value })} placeholder="Name" />
-              <Input value={agentDraft.title} onChange={(event) => setAgentDraft({ ...agentDraft, title: event.target.value })} placeholder="Role / title" />
-              <Input value={agentDraft.icon} onChange={(event) => setAgentDraft({ ...agentDraft, icon: event.target.value })} placeholder="Icon" />
-              <Input className="md:col-span-2" value={agentDraft.description} onChange={(event) => setAgentDraft({ ...agentDraft, description: event.target.value })} placeholder="Identity and communication style" />
-              <Textarea className="md:col-span-2" value={agentDraft.persona} onChange={(event) => setAgentDraft({ ...agentDraft, persona: event.target.value })} placeholder="Principles, persistent facts, activation notes, and menu actions" />
+              <div>
+                <label className="text-xs font-medium text-foreground block mb-1">Agent Slug (ID)</label>
+                <Input value={agentDraft.slug} onChange={(event) => setAgentDraft({ ...agentDraft, slug: event.target.value })} placeholder="Skill slug, e.g. security-reviewer" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground block mb-1">Agent Name</label>
+                <Input value={agentDraft.name} onChange={(event) => setAgentDraft({ ...agentDraft, name: event.target.value })} placeholder="Name" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground block mb-1">Role / Title</label>
+                <Input value={agentDraft.title} onChange={(event) => setAgentDraft({ ...agentDraft, title: event.target.value })} placeholder="Role / title" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground block mb-1">Icon / Emoji</label>
+                <Input value={agentDraft.icon} onChange={(event) => setAgentDraft({ ...agentDraft, icon: event.target.value })} placeholder="Icon" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-foreground block mb-1">Assigned Skill</label>
+                <select
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                  value={agentDraft.skillName}
+                  onChange={(event) => setAgentDraft({ ...agentDraft, skillName: event.target.value })}
+                >
+                  <option value="">Auto-create matching skill (.agents/skills/{agentDraft.slug || "slug"})</option>
+                  {skills.map((skill: any) => (
+                    <option key={skill.id} value={skill.name}>
+                      Assign to existing skill: {skill.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1">Select an existing skill or leave default to scaffold a new skill in .agents/skills/.</p>
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-foreground block mb-1">Identity & Communication Style</label>
+                <Input value={agentDraft.description} onChange={(event) => setAgentDraft({ ...agentDraft, description: event.target.value })} placeholder="Identity and communication style" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-foreground block mb-1">Persona, Principles, Persistent Facts & Activation Hooks</label>
+                <Textarea className="min-h-32 font-mono text-xs" value={agentDraft.persona} onChange={(event) => setAgentDraft({ ...agentDraft, persona: event.target.value })} placeholder="Principles, persistent facts, activation notes, and menu actions" />
+              </div>
             </div>
             <label className="mt-3 flex items-center gap-2 text-sm">
               <input type="checkbox" checked={agentDraft.scope === "personal"} onChange={(event) => setAgentDraft({ ...agentDraft, scope: event.target.checked ? "personal" : "team" })} />
@@ -878,16 +930,29 @@ export function BmadControlPanel({ owner, name }: Props) {
                 <Button size="sm" variant="ghost" onClick={() => setEditingSkill(null)}>Close</Button>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <Input value={editingSkill.slug} onChange={(event) => setEditingSkill({ ...editingSkill, slug: event.target.value })} placeholder="Managed skill slug" />
-                <Input value={editingSkill.name} onChange={(event) => setEditingSkill({ ...editingSkill, name: event.target.value })} placeholder="Display name" />
+                <div>
+                  <label className="text-xs font-medium text-foreground block mb-1">Managed Skill Slug (directory)</label>
+                  <Input value={editingSkill.slug} onChange={(event) => setEditingSkill({ ...editingSkill, slug: event.target.value })} placeholder="Managed skill slug" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-foreground block mb-1">Display Name</label>
+                  <Input value={editingSkill.name} onChange={(event) => setEditingSkill({ ...editingSkill, name: event.target.value })} placeholder="Display name" />
+                </div>
                 {!editingSkill.isManaged && (
-                  <select className="h-9 rounded-md border bg-background px-3 text-sm md:col-span-2" value={editingSkill.assignAgentId} onChange={(event) => setEditingSkill({ ...editingSkill, assignAgentId: event.target.value })}>
-                    <option value="">Do not assign this clone yet</option>
-                    {agents.map((agent: any) => <option key={agent.id} value={agent.id}>Assign to {agent.icon} {agent.name}</option>)}
-                  </select>
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium text-foreground block mb-1">Assign this skill to an agent</label>
+                    <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={editingSkill.assignAgentId} onChange={(event) => setEditingSkill({ ...editingSkill, assignAgentId: event.target.value })}>
+                      <option value="">Do not assign this clone yet</option>
+                      {agents.map((agent: any) => <option key={agent.id} value={agent.id}>Assign to {agent.icon} {agent.name} ({agent.title})</option>)}
+                    </select>
+                    <p className="text-[11px] text-muted-foreground mt-1">Assigning overrides the agent&apos;s active skill in _bmad/custom/config.toml.</p>
+                  </div>
                 )}
+                <div className="md:col-span-2">
+                  <label className="text-xs font-medium text-foreground block mb-1">SKILL.md Instructions & Persona Content</label>
+                  <Textarea className="min-h-80 font-mono text-xs" value={editingSkill.content} onChange={(event) => setEditingSkill({ ...editingSkill, content: event.target.value })} placeholder="SKILL.md content" />
+                </div>
               </div>
-              <Textarea className="mt-3 min-h-80" value={editingSkill.content} onChange={(event) => setEditingSkill({ ...editingSkill, content: event.target.value })} placeholder="SKILL.md content" />
               <Button className="mt-3" disabled={busy || !editingSkill.slug || !editingSkill.content} onClick={() => act(() => draftBmadOperation({ owner, name, kind: editingSkill.isManaged ? "write_skill" : "clone_skill", payload: { slug: editingSkill.slug, name: editingSkill.name, description: editingSkill.name, content: editingSkill.content, sourceDirectory: editingSkill.sourceDirectory, assignAgentId: editingSkill.assignAgentId } }))}>
                 <Sparkles className="mr-2 h-4 w-4" />Draft {editingSkill.isManaged ? "skill update" : "skill clone"}
               </Button>
@@ -895,12 +960,24 @@ export function BmadControlPanel({ owner, name }: Props) {
           )}
           <section className="rounded-xl border p-5">
             <h2 className="font-semibold">New managed skill</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Vendor-installed skills are read-only. This drafts a separate managed skill for review.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Vendor-installed skills are read-only. This drafts a separate managed skill in .agents/skills/ for review.</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <Input value={skillDraft.slug} onChange={(event) => setSkillDraft({ ...skillDraft, slug: event.target.value })} placeholder="Skill slug" />
-              <Input value={skillDraft.name} onChange={(event) => setSkillDraft({ ...skillDraft, name: event.target.value })} placeholder="Display name" />
-              <Input className="md:col-span-2" value={skillDraft.description} onChange={(event) => setSkillDraft({ ...skillDraft, description: event.target.value })} placeholder="Description" />
-              <Textarea className="md:col-span-2" value={skillDraft.persona} onChange={(event) => setSkillDraft({ ...skillDraft, persona: event.target.value })} placeholder="Skill instructions" />
+              <div>
+                <label className="text-xs font-medium text-foreground block mb-1">Skill Slug (directory name)</label>
+                <Input value={skillDraft.slug} onChange={(event) => setSkillDraft({ ...skillDraft, slug: event.target.value })} placeholder="Skill slug, e.g. security-audit" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground block mb-1">Display Name</label>
+                <Input value={skillDraft.name} onChange={(event) => setSkillDraft({ ...skillDraft, name: event.target.value })} placeholder="Display name" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-foreground block mb-1">Description</label>
+                <Input value={skillDraft.description} onChange={(event) => setSkillDraft({ ...skillDraft, description: event.target.value })} placeholder="Description of what this skill does" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-foreground block mb-1">Skill Instructions (SKILL.md markdown)</label>
+                <Textarea className="min-h-40 font-mono text-xs" value={skillDraft.persona} onChange={(event) => setSkillDraft({ ...skillDraft, persona: event.target.value })} placeholder="Skill instructions" />
+              </div>
             </div>
             <Button className="mt-3" disabled={busy || !skillDraft.slug} onClick={() => act(() => draftBmadOperation({ owner, name, kind: "write_skill", payload: skillDraft }))}>
               <Sparkles className="mr-2 h-4 w-4" />Draft managed skill

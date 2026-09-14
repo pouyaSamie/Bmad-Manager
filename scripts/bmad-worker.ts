@@ -108,7 +108,8 @@ async function execute(operation: Awaited<ReturnType<typeof nextOperation>>) {
       const personal = payload.scope === "personal";
       const config = safeChild(root, `_bmad/custom/config${personal ? ".user" : ""}.toml`);
       await fs.mkdir(path.dirname(config), { recursive: true });
-      const descriptor = `\n[agents.${slug}]\nteam = "custom"\nname = "${name.replaceAll('"', "'")}"\ntitle = "${title.replaceAll('"', "'")}"\nicon = "${icon.replaceAll('"', "'")}"\ndescription = "${description.replaceAll('"', "'")}"\n`;
+      const assignedSkill = typeof payload.skillName === "string" && payload.skillName ? payload.skillName : slug;
+      const descriptor = `\n[agents.${slug}]\nteam = "custom"\nname = "${name.replaceAll('"', "'")}"\ntitle = "${title.replaceAll('"', "'")}"\nicon = "${icon.replaceAll('"', "'")}"\ndescription = "${description.replaceAll('"', "'")}"\nskill = "${assignedSkill.replaceAll('"', "'")}"\n`;
       await fs.appendFile(config, descriptor, "utf8");
     }
     return `Created managed skill .agents/skills/${slug}/SKILL.md`;
