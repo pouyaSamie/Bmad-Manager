@@ -2,10 +2,18 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { Columns3, LayoutList } from "lucide-react";
 import { StoryFilters, createFilter, type Filter } from "./story-filters";
 import { StoriesTable } from "./stories-table";
 import { KanbanBoard } from "./kanban-board";
+import { StoryDetailView } from "@/components/epics/story-detail-view";
 import { StaggeredList, StaggeredItem } from "@/components/shared/staggered-list";
 import type { StoryDetail, Epic } from "@/lib/bmad/types";
 
@@ -48,6 +56,14 @@ export function StoriesView({
   });
 
   const [search, setSearch] = useState("");
+  const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
+  const selectedStory = useMemo(
+    () => (selectedStoryId ? stories.find((s) => s.id === selectedStoryId) ?? null : null),
+    [stories, selectedStoryId]
+  );
+  const handleSelectStory = useCallback((story: StoryDetail) => {
+    setSelectedStoryId(story.id);
+  }, []);
   const isInitialMount = useRef(true);
 
   // Sync with localStorage on client if no explicit server view in URL
@@ -131,7 +147,8 @@ export function StoriesView({
   );
 
   return (
-    <StaggeredList
+    <>
+      <StaggeredList
       className="space-y-4"
       role="region"
       aria-label="Stories list"
@@ -174,11 +191,38 @@ export function StoriesView({
       </StaggeredItem>
       <StaggeredItem>
         {view === "table" ? (
-          <StoriesTable stories={filtered} />
+          <StoriesTable stories={filtered} onSelectStory={handleSelectStory} />
         ) : (
-          <KanbanBoard stories={filtered} />
+          <KanbanBoard stories={filtered} onSelectStory={handleSelectStory} />
         )}
       </StaggeredItem>
     </StaggeredList>
+
+    <Sheet
+      open={!!selectedStory}
+      onOpenChange={(open) => {
+        if (!open) setSelectedStoryId(null);
+      }}
+    >
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-2xl overflow-y-auto"
+      >
+        <SheetHeader className="border-b pb-4 pr-10">
+          <SheetTitle className="text-base font-semibold">
+            Story Details
+          </SheetTitle>
+          <SheetDescription className="text-xs text-muted-foreground">
+            {selectedStory ? `Details and tasks for story ${selectedStory.id}` : "Story details"}
+          </SheetDescription>
+        </SheetHeader>
+        {selectedStory && (
+          <div className="p-4 pt-2">
+            <StoryDetailView story={selectedStory} />
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+    </>
   );
 }

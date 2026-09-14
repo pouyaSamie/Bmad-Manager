@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { WorkItemBadge } from "@/components/shared/work-item-badge";
 import { StaggeredList, StaggeredItem } from "@/components/shared/staggered-list";
+import { ListTodo } from "lucide-react";
 import type { StoryDetail, StoryStatus } from "@/lib/bmad/types";
 import { getStoryShortId } from "@/lib/bmad/utils";
 
@@ -16,9 +17,12 @@ const kanbanColumns: { status: StoryStatus; label: string; color: string }[] = [
   { status: "done", label: "Closed", color: "bg-success" },
 ];
 
-interface KanbanBoardProps { stories: StoryDetail[]; }
+interface KanbanBoardProps {
+  stories: StoryDetail[];
+  onSelectStory?: (story: StoryDetail) => void;
+}
 
-export function KanbanBoard({ stories }: KanbanBoardProps) {
+export function KanbanBoard({ stories, onSelectStory }: KanbanBoardProps) {
   if (stories.length === 0) return <div className="flex h-32 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">No story matches the filters.</div>;
 
   return (
@@ -30,7 +34,19 @@ export function KanbanBoard({ stories }: KanbanBoardProps) {
             <div className="flex items-center gap-2 border-b border-border/70 pb-3"><span className={`h-2 w-2 rounded-full ${column.color}`} aria-hidden="true" /><h3 className="text-sm font-semibold">{column.label}</h3><Badge variant="secondary" className="ml-auto rounded-sm text-xs">{columnStories.length}</Badge></div>
             <div className="mt-3 space-y-2">
               {columnStories.map((story) => (
-                <Card key={story.id} className="rounded-md border bg-card py-0 shadow-sm transition-colors hover:border-info/60 hover:bg-info/5">
+                <Card
+                  key={story.id}
+                  onClick={() => onSelectStory?.(story)}
+                  className="cursor-pointer rounded-md border bg-card py-0 shadow-sm transition-all hover:border-info/60 hover:bg-info/5 hover:shadow-md"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelectStory?.(story);
+                    }
+                  }}
+                >
                   <CardContent className="p-3">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
@@ -62,8 +78,11 @@ export function KanbanBoard({ stories }: KanbanBoardProps) {
                     )}
                     {story.totalTasks > 0 && (
                       <div className="mt-2.5 flex items-center justify-between border-t border-border/60 pt-2 text-xs text-muted-foreground">
-                        <span>Tasks</span>
-                        <span className="font-medium">{story.completedTasks}/{story.totalTasks}</span>
+                        <span className="flex items-center gap-1">
+                          <ListTodo className="h-3.5 w-3.5" />
+                          <span>Tasks</span>
+                        </span>
+                        <span className="font-medium tabular-nums">{story.completedTasks}/{story.totalTasks}</span>
                       </div>
                     )}
                   </CardContent>
