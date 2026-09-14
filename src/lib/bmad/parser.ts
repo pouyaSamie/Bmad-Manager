@@ -6,7 +6,7 @@ import { parseEpicFile } from "./parse-epic-file";
 import { parseStory } from "./parse-story";
 import { correlate, computeProjectStats } from "./correlate";
 import { buildFileTree, compareIds, normalizeStoryStatus } from "./utils";
-import { resolveBmadOutputDir } from "./parse-config";
+import { resolveBmadOutputDir, parseBmadAgents } from "./parse-config";
 import { parseEpicFolderName } from "./parse-epic-folder";
 import type { RepoConfig } from "@/lib/types";
 import type { ParsedBmadFile, BmadFileMetadata } from "./types";
@@ -172,6 +172,29 @@ export async function getBmadProject(
     );
   }
 
+  const configTomlPath = allPaths.find(
+    (p) => p === "_bmad/config.toml" || p.endsWith("/_bmad/config.toml")
+  );
+  const teamConfigTomlPath = allPaths.find(
+    (p) => p === "_bmad/custom/config.toml" || p.endsWith("/_bmad/custom/config.toml")
+  );
+
+  if (configTomlPath) {
+    fetches.push(
+      fetchContent(configTomlPath)
+        .then((content) => ({ key: "config-toml", content }))
+        .catch(() => ({ key: "config-toml", content: "" }))
+    );
+  }
+
+  if (teamConfigTomlPath) {
+    fetches.push(
+      fetchContent(teamConfigTomlPath)
+        .then((content) => ({ key: "team-config-toml", content }))
+        .catch(() => ({ key: "team-config-toml", content: "" }))
+    );
+  }
+
   const results = await Promise.all(fetches);
 
   const parseErrors: ParseErrorEntry[] = [];
@@ -180,6 +203,8 @@ export async function getBmadProject(
   let sprintStatus = null;
   let epicStatuses: { id: string; status: import("./types").EpicStatus }[] = [];
   let rawEpics: import("./types").Epic[] = [];
+  let configTomlContent = "";
+  let teamConfigTomlContent = "";
   const rawStories: NonNullable<ReturnType<typeof parseStory>>[] = [];
 
   // Track the parsed epic that came from each folder's epic.md so we can
@@ -252,6 +277,10 @@ export async function getBmadProject(
       } else {
         parseErrors.push({ file: storyPath, error: "Failed to parse story. Check the markdown format and section structure.", contentType: "story" });
       }
+    } else if (key === "config-toml") {
+      configTomlContent = content;
+    } else if (key === "team-config-toml") {
+      teamConfigTomlContent = content;
     }
   }
 
@@ -281,7 +310,8 @@ export async function getBmadProject(
     console.warn(`[BMAD Parse] ${owner}/${repo}: ${parseErrors.length} parsing errors out of ${totalFiles} files`);
   }
 
-  const correlated = correlate(sprintStatus, rawEpics, rawStories, epicStatuses);
+  const projectAgents = parseBmadAgents(configTomlContent, teamConfigTomlContent);
+  const correlated = correlate(sprintStatus, rawEpics, rawStories, epicStatuses, projectAgents);
   const epics = [...correlated.epics].sort((a, b) => compareIds(a.id, b.id));
   const stories = correlated.stories;
   const storyPathSet = new Set(storyPaths);
@@ -321,6 +351,7 @@ export async function getBmadProject(
     sprintStatus,
     epics,
     stories,
+    agents: projectAgents,
     fileTree,
     bmadFiles: bmadPaths,
     docsTree,

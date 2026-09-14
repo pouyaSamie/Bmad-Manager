@@ -197,4 +197,34 @@ describe("correlate", () => {
     expect(result.stories[0].id).toBe("4.1");
     expect(result.epics[0].totalStories).toBe(1);
   });
+
+  describe("agent correlation", () => {
+    it("assigns developer agent to in-progress story", () => {
+      const stories = [makeStory({ id: "5.1", status: "in-progress", title: "Backend telemetry" })];
+      const epics = [makeEpic({ id: "5" })];
+      const result = correlate(null, epics, stories);
+
+      expect(result.stories[0].agent).toBeDefined();
+      expect(result.stories[0].agent!.name).toBe("Amelia");
+      expect(result.stories[0].agent!.icon).toBe("💻");
+    });
+
+    it("matches agent name mentioned in story title", () => {
+      const stories = [makeStory({ id: "5.5", status: "ready-for-dev", title: "Nella Aimchess Fidelity Audit" })];
+      const epics = [makeEpic({ id: "5" })];
+      const result = correlate(null, epics, stories);
+
+      expect(result.stories[0].agent).toBeDefined();
+      expect(result.stories[0].agent!.name).toBe("Nella");
+      expect(result.stories[0].agent!.icon).toBe("👑");
+    });
+
+    it("preserves explicit agent on story", () => {
+      const stories = [makeStory({ id: "1.1", agent: { name: "Custom Agent", icon: "🚀" } })];
+      const epics = [makeEpic({ id: "1" })];
+      const result = correlate(null, epics, stories);
+
+      expect(result.stories[0].agent).toEqual({ name: "Custom Agent", icon: "🚀" });
+    });
+  });
 });

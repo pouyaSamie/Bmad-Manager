@@ -1,4 +1,62 @@
-import { BmadProject, Epic, SprintStatus, StoryDetail, EpicStatus } from "./types";
+import { BmadProject, Epic, SprintStatus, StoryDetail, EpicStatus, StoryAgent } from "./types";
+
+const DEFAULT_BMAD_AGENTS: StoryAgent[] = [
+  { slug: "bmad-agent-dev", name: "Amelia", title: "Developer", icon: "💻" },
+  { slug: "bmad-agent-pm", name: "John", title: "Product Manager", icon: "📋" },
+  { slug: "bmad-agent-po", name: "Nella", title: "Product Owner & Principal Design Critic", icon: "👑" },
+  { slug: "bmad-agent-tea", name: "Murat", title: "Quality Advisor", icon: "🧪" },
+  { slug: "bmad-agent-architect", name: "Winston", title: "System Architect", icon: "🏗️" },
+  { slug: "bmad-agent-ux-designer", name: "Sally", title: "UX Designer", icon: "🎨" },
+  { slug: "bmad-agent-analyst", name: "Mary", title: "Business Analyst", icon: "📊" },
+];
+
+function resolveStoryAgent(story: StoryDetail, agents: StoryAgent[]): StoryAgent | undefined {
+  if (story.agent?.name) {
+    const matched = agents.find(
+      (a) =>
+        a.name.toLowerCase() === story.agent!.name.toLowerCase() ||
+        (a.slug && a.slug.toLowerCase() === story.agent!.name.toLowerCase())
+    );
+    if (matched) {
+      return {
+        slug: matched.slug,
+        name: matched.name,
+        title: story.agent.title || matched.title,
+        icon: story.agent.icon || matched.icon,
+      };
+    }
+    return story.agent;
+  }
+
+  for (const a of agents) {
+    const regex = new RegExp(`\\b${a.name}\\b`, "i");
+    if (regex.test(story.title) || (a.slug && story.title.toLowerCase().includes(a.slug.toLowerCase()))) {
+      return a;
+    }
+  }
+
+  if (story.status === "in-progress") {
+    const dev = agents.find((a) => a.slug === "bmad-agent-dev" || /dev|engineer/i.test(a.title || "") || /amelia/i.test(a.name));
+    if (dev) return dev;
+  }
+
+  if (story.status === "review") {
+    const reviewer = agents.find((a) => a.slug === "bmad-agent-tea" || /qa|test|review/i.test(a.title || "") || /murat/i.test(a.name));
+    if (reviewer) return reviewer;
+  }
+
+  if (story.status === "ready-for-dev") {
+    const dev = agents.find((a) => a.slug === "bmad-agent-dev" || /dev|engineer/i.test(a.title || "") || /amelia/i.test(a.name));
+    if (dev) return dev;
+  }
+
+  if (story.status === "done") {
+    const dev = agents.find((a) => a.slug === "bmad-agent-dev" || /dev|engineer/i.test(a.title || "") || /amelia/i.test(a.name));
+    if (dev) return dev;
+  }
+
+  return undefined;
+}
 
 /**
  * Convert a sprint-status slug like "1-1-project-initialization" into
@@ -18,7 +76,8 @@ export function correlate(
   sprintStatus: SprintStatus | null,
   epics: Epic[],
   stories: StoryDetail[],
-  epicStatuses?: { id: string; status: EpicStatus }[]
+  epicStatuses?: { id: string; status: EpicStatus }[],
+  projectAgents?: StoryAgent[]
 ): { epics: Epic[]; stories: StoryDetail[] } {
   // Work on copies to avoid mutating the input arrays/objects
   let mutableStories = stories.map((s) => ({ ...s }));
@@ -103,6 +162,15 @@ export function correlate(
     };
   });
 
+  const allAgents = [...(projectAgents || []), ...DEFAULT_BMAD_AGENTS];
+  const seenAgentKeys = new Set<string>();
+  const uniqueAgents = allAgents.filter((a) => {
+    const key = (a.slug || a.name).toLowerCase();
+    if (seenAgentKeys.has(key)) return false;
+    seenAgentKeys.add(key);
+    return true;
+  });
+
   const resultStories = mutableStories.map((story) => {
     let epic = story.epicId
       ? enrichedEpics.find((e) => e.id === story.epicId)
@@ -112,11 +180,9 @@ export function correlate(
       epic = enrichedEpics.find((e) => e.stories.includes(story.id));
     }
 
-    if (epic) {
-      return { ...story, epicId: epic.id, epicTitle: epic.title };
-    }
-
-    return story;
+    const resolvedAgent = story.agent || resolveStoryAgent(story, uniqueAgents);
+    const base = epic ? { ...story, epicId: epic.id, epicTitle: epic.title } : story;
+    return resolvedAgent ? { ...base, agent: resolvedAgent } : base;
   });
 
   return { epics: enrichedEpics, stories: resultStories };

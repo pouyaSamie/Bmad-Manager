@@ -185,6 +185,33 @@ epic_id: 1
     });
   });
 
+  describe("agent parsing", () => {
+    it("extracts agent from frontmatter", () => {
+      const content = `---
+agent: Amelia
+status: in-progress
+---
+# Story`;
+      const result = parseStory(content, "1-1-test.md");
+      expect(result!.agent).toEqual({ name: "Amelia" });
+    });
+
+    it("extracts agent with emoji icon", () => {
+      const content = `---
+developer: 💻 Amelia
+---
+# Story`;
+      const result = parseStory(content, "1-1-test.md");
+      expect(result!.agent).toEqual({ icon: "💻", name: "Amelia" });
+    });
+
+    it("extracts agent from inline body", () => {
+      const content = `# Story 1.1\n\n**Agent:** Nella\n\nDescription`;
+      const result = parseStory(content, "1-1-test.md");
+      expect(result!.agent).toEqual({ name: "Nella" });
+    });
+  });
+
   describe("error handling", () => {
     it("returns null on truly invalid content", () => {
       // parseStory is quite resilient, but we can test the fallback behavior

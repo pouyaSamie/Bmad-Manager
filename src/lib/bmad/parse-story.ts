@@ -74,6 +74,40 @@ export function parseStory(
     const statusExplicit = Boolean(rawStatus);
     const status = normalizeStoryStatus(rawStatus);
 
+    // Extract agent from frontmatter or inline line
+    const agentLineMatch = body.match(
+      /^\s*(?:\*{1,2})?(?:Agent|Assigned to|Assignee|Developer|Owner)(?:\*{1,2})?:\s*(.+)/im
+    );
+    const rawAgent =
+      (hasFrontmatter
+        ? (matter(content).data.agent ||
+          matter(content).data.assignee ||
+          matter(content).data.assigned_to ||
+          matter(content).data.developer ||
+          matter(content).data.owner)
+        : undefined) || agentLineMatch?.[1]?.trim();
+
+    let agent: StoryDetail["agent"] = undefined;
+    if (rawAgent) {
+      if (typeof rawAgent === "object" && rawAgent !== null) {
+        const obj = rawAgent as Record<string, unknown>;
+        agent = {
+          name: String(obj.name || obj.slug || "").replace(/^[*_`\s]+|[*_`\s]+$/g, ""),
+          title: obj.title ? String(obj.title).trim() : undefined,
+          icon: obj.icon ? String(obj.icon).trim() : undefined,
+          slug: obj.slug ? String(obj.slug).trim() : undefined,
+        };
+      } else {
+        const str = String(rawAgent).replace(/^[*_`\s]+|[*_`\s]+$/g, "").trim();
+        const emojiMatch = str.match(/^(\p{Extended_Pictographic}|\p{Emoji})\s+(.+)$/u);
+        if (emojiMatch) {
+          agent = { icon: emojiMatch[1], name: emojiMatch[2].trim() };
+        } else {
+          agent = { name: str };
+        }
+      }
+    }
+
     // Extract acceptance criteria
     const acceptanceCriteria: string[] = [];
     const acSection = body.match(
@@ -110,6 +144,7 @@ export function parseStory(
       tasks,
       completedTasks: tasks.filter((t) => t.completed).length,
       totalTasks: tasks.length,
+      agent,
     };
   } catch (e) {
     console.error(`Failed to parse story ${filename}:`, e);

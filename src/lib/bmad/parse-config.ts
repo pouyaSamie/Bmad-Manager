@@ -104,3 +104,41 @@ export async function resolveBmadOutputDir(
     return { outputDir, paths: initialPaths };
   }
 }
+
+import type { StoryAgent } from "./types";
+
+function extractAgentBlocks(content: string): Map<string, string> {
+  const sections = content
+    .split(/\r?\n(?=\[agents\.)/)
+    .filter((section) => section.startsWith("[agents."));
+  return new Map(
+    sections.flatMap((block) => {
+      const slug = block.match(/^\[agents\.([^\]]+)\]/)?.[1];
+      return slug ? [[slug, block] as const] : [];
+    })
+  );
+}
+
+function extractTomlField(block: string | undefined, field: string): string | null {
+  return block?.match(new RegExp(`^${field}\\s*=\\s*"([^"]*)"`, "m"))?.[1] ?? null;
+}
+
+export function parseBmadAgents(configToml: string, teamConfigToml?: string): StoryAgent[] {
+  const base = extractAgentBlocks(configToml || "");
+  const team = extractAgentBlocks(teamConfigToml || "");
+  const slugs = new Set([...base.keys(), ...team.keys()]);
+
+  return [...slugs].map((slug) => {
+    const blocks = [base.get(slug), team.get(slug)];
+    const read = (field: string, fallback: string) =>
+      blocks.reduce<string>((val, blk) => extractTomlField(blk, field) ?? val, fallback);
+
+    return {
+      slug,
+      name: read("name", slug),
+      title: read("title", "BMAD Agent"),
+      icon: read("icon", "🤖"),
+    };
+  });
+}
+

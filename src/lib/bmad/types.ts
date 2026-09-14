@@ -35,6 +35,13 @@ export interface Epic {
   progressPercent: number;
 }
 
+export interface StoryAgent {
+  slug?: string;
+  name: string;
+  title?: string;
+  icon?: string;
+}
+
 export interface StoryDetail {
   id: string;
   title: string;
@@ -52,6 +59,7 @@ export interface StoryDetail {
   tasks: StoryTask[];
   completedTasks: number;
   totalTasks: number;
+  agent?: StoryAgent | null;
 }
 
 export interface StoryTask {
@@ -109,6 +117,7 @@ export interface BmadProject {
   docsTree: FileTreeNode[];
   docsFolderName: string | null;
   parseHealth?: ParseHealthReport;
+  agents?: StoryAgent[];
   totalStories: number;
   completedStories: number;
   inProgressStories: number;

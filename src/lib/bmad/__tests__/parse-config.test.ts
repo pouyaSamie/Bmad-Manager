@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   parseConfigContent,
+  parseBmadAgents,
   getBmadConfig,
   isPathOutsideNestedOutput,
   DEFAULT_OUTPUT_DIR,
@@ -159,3 +160,47 @@ describe("isPathOutsideNestedOutput", () => {
     expect(isPathOutsideNestedOutput("custom/output-something/file.md", "custom/out")).toBe(true);
   });
 });
+
+describe("parseBmadAgents", () => {
+  it("extracts agents with custom team overrides", () => {
+    const baseToml = `
+[agents.bmad-agent-dev]
+name = "Amelia"
+title = "Developer"
+icon = "💻"
+
+[agents.bmad-agent-pm]
+name = "John"
+title = "Product Manager"
+icon = "📋"
+`;
+    const customToml = `
+[agents.bmad-agent-dev]
+title = "Senior Software Engineer"
+
+[agents.bmad-agent-po]
+name = "Nella"
+title = "Product Owner"
+icon = "👑"
+`;
+    const agents = parseBmadAgents(baseToml, customToml);
+    expect(agents).toHaveLength(3);
+
+    const dev = agents.find((a) => a.slug === "bmad-agent-dev");
+    expect(dev).toEqual({
+      slug: "bmad-agent-dev",
+      name: "Amelia",
+      title: "Senior Software Engineer",
+      icon: "💻",
+    });
+
+    const po = agents.find((a) => a.slug === "bmad-agent-po");
+    expect(po).toEqual({
+      slug: "bmad-agent-po",
+      name: "Nella",
+      title: "Product Owner",
+      icon: "👑",
+    });
+  });
+});
+
