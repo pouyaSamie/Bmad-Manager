@@ -1,4 +1,4 @@
-# Bmad Manager
+# BMad Manager
 
 > A self-hosted command center for [BMad](https://github.com/bmad-method/bmad-method) projects—turning planning files into a clear view of delivery, progress, and controlled project operations.
 
@@ -7,9 +7,10 @@ BMad Manager is for teams using BMad who want to spend less time opening Markdow
 ## What it helps you do
 
 - **See the whole portfolio:** compare project health, completed work, active work, and story counts from one dashboard.
+- **Bootstrap projects instantly:** auto-install BMAD in new or existing local folders with a zero-typing graphical wizard and immediate agent/skill discovery.
 - **Keep delivery understandable:** move from an epic to its stories and their current state without manually reconciling planning artifacts.
-- **Find the source material quickly:** browse project planning and implementation files beside the delivery view.
-- **Operate local projects carefully:** use BMad Control to inspect agents and skills, preview changes, and send only approved work to a separate worker.
+- **Find source material and visual assets:** browse project planning docs with rich markdown rendering, embedded screenshots, and interactive image inspection.
+- **Operate local projects carefully:** use BMad Control to arrange agent workflows with visual drag-and-drop, configure feedback loops, and approve changes safely.
 
 ## See it in action
 
@@ -17,7 +18,7 @@ BMad Manager is for teams using BMad who want to spend less time opening Markdow
 
 The dashboard is the fastest answer to “what is happening across our BMad projects?” It shows active projects, total epics and stories, completed work, and current work in progress before you drill into an individual project.
 
-![Bmad Manager portfolio dashboard](./docs/screen1.png)
+![BMad Manager portfolio dashboard](./docs/screen1.png)
 
 ### Understand one project at a glance
 
@@ -52,7 +53,7 @@ BMad Control is for local projects that need a deliberate operating surface. It 
 ## Key capabilities
 
 - **Automatic BMAD Installation & Zero-Typing Wizard:** Import existing BMAD folders or provision new ones automatically with a graphical wizard matching the CLI (tool checkboxes, module selectors, language options, release channels).
-- **Full BMad Method Agent Workflow:** Visual drag-and-drop sequencing and configurable feedback loops (e.g. Nella $\rightarrow$ John, Murat $\rightarrow$ John) with support for all core agents (Mary, John, Sally, Winston, Amelia, Murat, Nella).
+- **Full BMad Method Agent Workflow:** Visual drag-and-drop sequencing and configurable feedback loops (e.g. Nella → John, Murat → John) with support for all core agents (Mary, John, Sally, Winston, Amelia, Murat, Nella).
 - **Rich Documentation Library & Asset Viewer:** In-app markdown documentation with relative screenshot/image resolution, interactive image inspection (zoom, pan, dimensions, download), and recursive expand/collapse file tree controls.
 - **Track epics, stories, sprint status, and velocity:** Automatic correlation of numeric and alphanumeric epics from single or split files.
 - **Controlled Local Operations:** BMad Control operating surface with preview, approval queue, and isolated worker execution.
@@ -90,7 +91,7 @@ pnpm dev
 
 Open [http://localhost:3002](http://localhost:3002), sign in, then add a GitHub repository or local BMad folder. For environment variables and detailed setup, read [Getting Started](./docs/GETTING_STARTED.md).
 
-## How to use Bmad Manager
+## How to use BMad Manager
 
 ### 1. Add a BMad project
 
@@ -118,9 +119,9 @@ Open **Docs Library** to browse project artifacts:
 ### 5. Operate and customize workflows in BMad Control
 
 For local projects, open **BMad Control** to inspect and manage your project runtime:
-- **Agent Workflow Progression:** Inspect the complete core agent team: Mary (Analyst) $\rightarrow$ John (PM) $\rightarrow$ Sally (UX) $\rightarrow$ Winston (Architect) $\rightarrow$ Amelia (Dev) $\rightarrow$ Murat (QA Advisor) $\rightarrow$ Nella (Product Owner & Design Critic).
+- **Agent Workflow Progression:** Inspect the complete core agent team: Mary (Analyst) → John (PM) → Sally (UX) → Winston (Architect) → Amelia (Dev) → Murat (QA Advisor) → Nella (Product Owner & Design Critic).
 - **Visual Reordering & Drag-and-Drop:** Visually adjust the execution sequence using intuitive grab handles and directional controls.
-- **Configurable Feedback Loops:** Define review channels (e.g. Nella's PO verdicts $\rightarrow$ John for story iteration, Murat's test findings $\rightarrow$ John for triage) persisted in `_bmad/custom/workflow.toml`.
+- **Configurable Feedback Loops:** Define review channels (e.g. Nella's PO verdicts → John for story iteration, Murat's test findings → John for triage) persisted in `_bmad/custom/workflow.toml`.
 - **Safe Execution Surface:** Draft operations to preview CLI commands, approve them after review, and let the background worker (`pnpm bmad:worker`) process them safely.
 
 ### Run the BMad Control worker
@@ -155,7 +156,7 @@ pnpm bmad:worker      # Process approved BMad Control operations
 
 ## BMad project conventions
 
-Bmad Manager supports numeric and alphanumeric epic identifiers.
+BMad Manager supports numeric and alphanumeric epic identifiers.
 
 | Artifact | Example | Detected ID |
 | --- | --- | --- |

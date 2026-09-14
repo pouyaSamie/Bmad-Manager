@@ -10,7 +10,7 @@ Set this in `.env`, then restart the application:
 ENABLE_LOCAL_FS=true
 ```
 
-Select **Add a project** on the dashboard, open **Local Folder**, and choose a project folder. The project must contain `_bmad/` or `_bmad-output/`. After import, use **Refresh** when its files change.
+Select **Add a project** on the dashboard, open **Local Folder**, and choose or enter a project folder. If the folder already contains `_bmad/` or `_bmad-output/`, it is imported immediately. If BMAD is not yet installed, BMad Manager prompts you with a zero-typing graphical installation wizard to configure and install BMAD non-interactively. After import, use **Refresh** when its files change.
 
 ## Running the app directly on your machine
 
