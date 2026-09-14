@@ -72,7 +72,8 @@ export function StoriesView({
       try {
         const savedView = localStorage.getItem("bmad_stories_view");
         if (savedView === "table" || savedView === "kanban") {
-          setView(savedView);
+          const timeoutId = window.setTimeout(() => setView(savedView), 0);
+          return () => window.clearTimeout(timeoutId);
         }
       } catch {}
     }

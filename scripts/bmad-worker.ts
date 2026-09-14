@@ -32,20 +32,53 @@ async function execute(operation: Awaited<ReturnType<typeof nextOperation>>) {
   const payload = operation.payload as Record<string, unknown>;
   if (operation.kind === "install" || operation.kind === "update") {
     const tools = Array.isArray(payload.tools) ? payload.tools.map(String) : ["codex"];
-    return runBmadInstaller(root, tools);
+    const modules = Array.isArray(payload.modules) ? payload.modules.map(String) : ["bmm"];
+    return runBmadInstaller(root, {
+      tools,
+      modules,
+      userName: typeof payload.userName === "string" ? payload.userName : undefined,
+      communicationLanguage: typeof payload.communicationLanguage === "string" ? payload.communicationLanguage : undefined,
+      documentOutputLanguage: typeof payload.documentOutputLanguage === "string" ? payload.documentOutputLanguage : undefined,
+      outputFolder: typeof payload.outputFolder === "string" ? payload.outputFolder : undefined,
+      channel: payload.channel === "next" ? "next" : "stable",
+      shims: Boolean(payload.shims),
+    });
   }
   if (operation.kind === "set_workflow") {
     const agentIds = Array.isArray(payload.agentIds) ? payload.agentIds.map(String) : [];
+    const rawLoops = Array.isArray(payload.loops) ? (payload.loops as Record<string, unknown>[]) : [];
     const agents = await prisma.bmadAgent.findMany({ where: { runtimeId: operation.runtime.id, id: { in: agentIds } } });
     if (agents.length !== agentIds.length) throw new Error("Workflow contains an unknown agent");
     const byId = new Map(agents.map((agent) => [agent.id, agent]));
     const ordered = agentIds.map((id) => byId.get(id)!);
     const workflowPath = safeChild(root, "_bmad/custom/workflow.toml");
     const slugs = ordered.map((agent) => `"${agent.slug}"`).join(", ");
+
+    let toml = `# Managed by Bmad-Manager. Project workflow order and feedback loops.\n[workflow]\nagents = [${slugs}]\n`;
+    const savedLoops: Array<{ id: string; fromAgentId: string; toAgentId: string; trigger: string; description?: string }> = [];
+
+    for (const loop of rawLoops) {
+      const fromAgent = byId.get(String(loop.fromAgentId));
+      const toAgent = byId.get(String(loop.toAgentId));
+      if (fromAgent && toAgent) {
+        const trigger = String(loop.trigger ?? "verdicts");
+        const desc = loop.description ? String(loop.description) : "";
+        toml += `\n[[workflow.loops]]\nfrom = "${fromAgent.slug}"\nto = "${toAgent.slug}"\ntrigger = "${trigger}"\n`;
+        if (desc) toml += `description = "${desc.replaceAll('"', '\\"')}"\n`;
+        savedLoops.push({
+          id: String(loop.id || `${fromAgent.id}->${toAgent.id}:${trigger}`),
+          fromAgentId: fromAgent.id,
+          toAgentId: toAgent.id,
+          trigger,
+          description: desc,
+        });
+      }
+    }
+
     await fs.mkdir(path.dirname(workflowPath), { recursive: true });
-    await fs.writeFile(workflowPath, `# Managed by Bmad-Manager. Project workflow order.\n[workflow]\nagents = [${slugs}]\n`, "utf8");
-    await prisma.bmadProjectRuntime.update({ where: { id: operation.runtime.id }, data: { workflow: { agentIds } } });
-    return `Updated workflow with ${ordered.length} agents`;
+    await fs.writeFile(workflowPath, toml, "utf8");
+    await prisma.bmadProjectRuntime.update({ where: { id: operation.runtime.id }, data: { workflow: { agentIds, loops: savedLoops } } });
+    return `Updated workflow with ${ordered.length} agents and ${savedLoops.length} feedback loops`;
   }
   if (operation.kind === "customize_agent") {
     return writeAgentOverride(root, payload);

@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { FileText, FileCode, FileJson, FileType, FileSpreadsheet } from "lucide-react";
+import { FileText, FileCode, FileJson, FileType, FileSpreadsheet, FileImage } from "lucide-react";
 
 type LucideIcon = React.ComponentType<{ className?: string }>;
 
@@ -19,6 +19,12 @@ const EXTENSION_ICONS: Record<string, FileIconDef> = {
   tsx: { icon: FileType, color: "text-blue-500" },
   js: { icon: FileType, color: "text-yellow-500" },
   jsx: { icon: FileType, color: "text-yellow-500" },
+  png: { icon: FileImage, color: "text-purple-500" },
+  jpg: { icon: FileImage, color: "text-purple-500" },
+  jpeg: { icon: FileImage, color: "text-purple-500" },
+  svg: { icon: FileImage, color: "text-pink-500" },
+  webp: { icon: FileImage, color: "text-purple-500" },
+  gif: { icon: FileImage, color: "text-purple-500" },
 };
 
 const DEFAULT_ICON: FileIconDef = { icon: FileText, color: "text-muted-foreground" };

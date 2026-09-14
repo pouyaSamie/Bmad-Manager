@@ -75,31 +75,57 @@ async function main() {
     },
   });
 
-  await prisma.bmadAgent.upsert({
-    where: { runtimeId_slug: { runtimeId: runtime.id, slug: "product-planner" } },
-    create: {
+  // Seed the full BMad delivery loop rather than a placeholder pipeline. The
+  // same agent order and review loops are used by BMad Control as its default.
+  await prisma.bmadAgent.deleteMany({
+    where: {
       runtimeId: runtime.id,
-      slug: "product-planner",
-      skillName: "planning",
-      name: "Maya",
-      title: "Product Planner",
-      icon: "🧭",
-      description: "Turns discovery notes into scoped, reviewable plans.",
+      slug: { in: ["product-planner", "delivery-engineer"] },
     },
-    update: {},
   });
-  await prisma.bmadAgent.upsert({
-    where: { runtimeId_slug: { runtimeId: runtime.id, slug: "delivery-engineer" } },
-    create: {
-      runtimeId: runtime.id,
-      slug: "delivery-engineer",
-      skillName: "implementation",
-      name: "Noah",
-      title: "Delivery Engineer",
-      icon: "⚡",
-      description: "Guides implementation and prepares reviewable changes.",
+  const agentDefinitions = [
+    ["bmad-agent-analyst", "analysis", "Mary", "Business Analyst", "🔎", "Frames the problem, research, and discovery findings."],
+    ["bmad-agent-pm", "planning", "John", "Product Manager", "🧭", "Turns discovery into a prioritized, reviewable delivery plan."],
+    ["bmad-agent-ux-designer", "ux-design", "Sally", "UX Designer", "🎨", "Shapes the experience and validates the user journey."],
+    ["bmad-agent-architect", "architecture", "architecture", "Solution Architect", "🏗️", "Defines the technical approach and delivery guardrails."],
+    ["bmad-agent-dev", "implementation", "Amelia", "Developer", "⚡", "Implements approved stories and prepares work for review."],
+    ["bmad-tea", "quality", "Murat", "Test Engineer", "🧪", "Tests delivery outcomes and reports actionable findings."],
+    ["bmad-agent-po", "product-ownership", "Nella", "Product Owner & Critic", "👑", "Reviews outcomes against acceptance criteria and delivery intent."],
+  ] as const;
+  const agents = await Promise.all(agentDefinitions.map(async ([slug, skillName, name, title, icon, description]) =>
+    prisma.bmadAgent.upsert({
+      where: { runtimeId_slug: { runtimeId: runtime.id, slug } },
+      create: { runtimeId: runtime.id, slug, skillName, name, title, icon, description },
+      update: { skillName, name, title, icon, description },
+    })
+  ));
+  const agentBySlug = new Map(agents.map((agent) => [agent.slug, agent]));
+  const john = agentBySlug.get("bmad-agent-pm")!;
+  const murat = agentBySlug.get("bmad-tea")!;
+  const nella = agentBySlug.get("bmad-agent-po")!;
+  await prisma.bmadProjectRuntime.update({
+    where: { id: runtime.id },
+    data: {
+      workflow: {
+        agentIds: agents.map((agent) => agent.id),
+        loops: [
+          {
+            id: `${nella.id}->${john.id}:verdicts`,
+            fromAgentId: nella.id,
+            toAgentId: john.id,
+            trigger: "verdicts",
+            description: "Route PO verdicts and unmet acceptance criteria back to planning for another delivery pass.",
+          },
+          {
+            id: `${murat.id}->${john.id}:findings`,
+            fromAgentId: murat.id,
+            toAgentId: john.id,
+            trigger: "findings",
+            description: "Route test findings and quality defects back to planning for triage and story refinement.",
+          },
+        ],
+      },
     },
-    update: {},
   });
 
   console.log(`Demo ready for ${demoUser.email} (password: ${demoUser.password}).`);

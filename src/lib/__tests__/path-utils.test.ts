@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import fs from "node:fs";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   normalizePathSeparators,
   getCrossPlatformBasename,
@@ -15,9 +16,14 @@ describe("path-utils", () => {
       LOCAL_WORKSPACE_PATH: "/workspace",
       LOCAL_HOST_WORKSPACE: "C:/workspace",
     };
+    // These cases exercise the Docker-path mapping. A real host path should
+    // still take precedence in production when it exists.
+    vi.spyOn(fs, "existsSync").mockReturnValue(false);
+    vi.spyOn(process, "platform", "get").mockReturnValue("linux");
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     process.env = originalEnv;
   });
 
@@ -65,6 +71,7 @@ describe("path-utils", () => {
     });
 
     it("preserves /workspace/project as is", () => {
+      process.env.LOCAL_HOST_WORKSPACE = "/workspace";
       const resolved = resolveLocalPath("/workspace/chess-report");
       expect(resolved).toBe("/workspace/chess-report");
     });

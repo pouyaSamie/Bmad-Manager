@@ -6,7 +6,6 @@ import { WorkItemBadge } from "@/components/shared/work-item-badge";
 import { StaggeredList, StaggeredItem } from "@/components/shared/staggered-list";
 import { ListTodo } from "lucide-react";
 import type { StoryDetail, StoryStatus } from "@/lib/bmad/types";
-import { getStoryShortId } from "@/lib/bmad/utils";
 
 const kanbanColumns: { status: StoryStatus; label: string; color: string }[] = [
   { status: "backlog", label: "New", color: "bg-muted-foreground" },

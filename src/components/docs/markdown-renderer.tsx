@@ -19,11 +19,21 @@ import {
   AlertCircle,
   AlertTriangle,
   OctagonAlert,
+  Image as ImageIcon,
 } from "lucide-react";
 
-interface MarkdownRendererProps {
+export interface MarkdownRendererProps {
   content: string;
+  owner?: string;
+  repo?: string;
+  currentFilePath?: string;
 }
+
+const MarkdownDocContext = React.createContext<{
+  owner?: string;
+  repo?: string;
+  currentFilePath?: string;
+}>({});
 
 const CALLOUT_CONFIG: Record<
   string,
@@ -185,14 +195,66 @@ function SmartLink(props: React.ComponentProps<"a">) {
 }
 
 function LazyImage(props: React.ComponentProps<"img">) {
-  const { className, alt, ...rest } = props;
+  const { className, alt, src, ...rest } = props;
+  const { owner, repo, currentFilePath } = React.useContext(MarkdownDocContext);
+  const [hasError, setHasError] = React.useState(false);
+
+  const resolvedSrc = React.useMemo(() => {
+    if (!src || typeof src !== "string") return "";
+    if (
+      src.startsWith("http://") ||
+      src.startsWith("https://") ||
+      src.startsWith("data:") ||
+      src.startsWith("/api/")
+    ) {
+      return src;
+    }
+
+    if (!owner || !repo) return src;
+
+    let targetPath = src;
+    if (currentFilePath) {
+      const dir = currentFilePath.includes("/")
+        ? currentFilePath.substring(0, currentFilePath.lastIndexOf("/"))
+        : "";
+      if (src.startsWith("./") || src.startsWith("../") || !src.startsWith("/")) {
+        const parts = (dir ? dir + "/" + src : src).split("/");
+        const resolvedParts: string[] = [];
+        for (const part of parts) {
+          if (part === "" || part === ".") continue;
+          if (part === "..") {
+            resolvedParts.pop();
+          } else {
+            resolvedParts.push(part);
+          }
+        }
+        targetPath = resolvedParts.join("/");
+      } else {
+        targetPath = src.replace(/^\/+/, "");
+      }
+    }
+
+    return `/api/repo/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/raw?path=${encodeURIComponent(targetPath)}`;
+  }, [src, owner, repo, currentFilePath]);
+
+  if (hasError) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground my-2">
+        <ImageIcon className="size-4 shrink-0 opacity-60" />
+        <span>{alt || "Image preview unavailable"} ({typeof src === "string" ? src : "image"})</span>
+      </span>
+    );
+  }
+
   /* eslint-disable @next/next/no-img-element */
   return (
     <img
       {...rest}
+      src={resolvedSrc}
       alt={alt ?? ""}
       loading="lazy"
-      className={cn("rounded-lg shadow-sm max-w-full h-auto", className)}
+      onError={() => setHasError(true)}
+      className={cn("rounded-lg border border-border shadow-sm max-w-full h-auto my-3", className)}
     />
   );
   /* eslint-enable @next/next/no-img-element */
@@ -229,21 +291,28 @@ const components: Components = {
   },
 };
 
-export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+export function MarkdownRenderer({
+  content,
+  owner,
+  repo,
+  currentFilePath,
+}: MarkdownRendererProps) {
   return (
-    <div className="prose prose-zinc dark:prose-invert max-w-none">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[
-          [rehypeSanitize, bmadSanitizeSchema],
-          rehypeSlug,
-          [rehypeAutolinkHeadings, { behavior: "prepend", properties: { className: ["autolink-heading"], ariaHidden: "true", tabIndex: -1 } }],
-          rehypeHighlight,
-        ]}
-        components={components}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
+    <MarkdownDocContext.Provider value={{ owner, repo, currentFilePath }}>
+      <div className="prose prose-zinc dark:prose-invert max-w-none">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[
+            [rehypeSanitize, bmadSanitizeSchema],
+            rehypeSlug,
+            [rehypeAutolinkHeadings, { behavior: "prepend", properties: { className: ["autolink-heading"], ariaHidden: "true", tabIndex: -1 } }],
+            rehypeHighlight,
+          ]}
+          components={components}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
+    </MarkdownDocContext.Provider>
   );
 }

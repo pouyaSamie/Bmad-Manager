@@ -51,9 +51,9 @@ describe("LocalProvider", () => {
       const provider = new LocalProvider(tmpDir);
       const tree = await provider.getTree();
 
-      expect(tree.paths).toContain(path.join("_bmad-output", "a.txt"));
-      expect(tree.paths).toContain(path.join("_bmad-output", "sub", "b.txt"));
-      expect(tree.paths).toContain(path.join("_bmad-output", "sub", "deep", "c.txt"));
+      expect(tree.paths).toContain("_bmad-output/a.txt");
+      expect(tree.paths).toContain("_bmad-output/sub/b.txt");
+      expect(tree.paths).toContain("_bmad-output/sub/deep/c.txt");
     });
 
     it("returns only files, not directories", async () => {
@@ -62,7 +62,7 @@ describe("LocalProvider", () => {
       const provider = new LocalProvider(tmpDir);
       const tree = await provider.getTree();
 
-      expect(tree.paths).toEqual([path.join("_bmad-output", "file.txt")]);
+      expect(tree.paths).toEqual(["_bmad-output/file.txt"]);
     });
 
     it("returns empty list for empty directory", async () => {
@@ -96,7 +96,7 @@ describe("LocalProvider", () => {
       const provider = new LocalProvider(tmpDir);
       const tree = await provider.getTree();
 
-      expect(tree.paths).toEqual([path.join("_bmad-output", "real.md")]);
+      expect(tree.paths).toEqual(["_bmad-output/real.md"]);
     });
 
     it("respects maxFileCount limit", async () => {
@@ -116,8 +116,8 @@ describe("LocalProvider", () => {
       const provider = new LocalProvider(tmpDir, { maxDepth: 2 });
       const tree = await provider.getTree();
 
-      expect(tree.paths).toContain(path.join("_bmad", "a.txt"));
-      expect(tree.paths).not.toContain(path.join("_bmad", "d1", "d2", "d3", "deep.txt"));
+      expect(tree.paths).toContain("_bmad/a.txt");
+      expect(tree.paths).not.toContain("_bmad/d1/d2/d3/deep.txt");
     });
   });
 

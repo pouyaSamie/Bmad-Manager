@@ -7,6 +7,7 @@ import { TableOfContents } from "./table-of-contents";
 import { FileMetadataBar } from "./file-metadata-bar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -20,6 +21,10 @@ import {
   Settings,
   ChevronRight,
   ChevronDown,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Download,
 } from "lucide-react";
 import { fetchParsedFileContent } from "@/actions/repo-actions";
 import hljs from "highlight.js/lib/core";
@@ -52,6 +57,81 @@ function CodeRenderer({
     <pre className="hljs rounded-lg p-4 overflow-x-auto text-sm leading-relaxed">
       <code dangerouslySetInnerHTML={{ __html: html }} />
     </pre>
+  );
+}
+
+function ImageViewer({
+  src,
+  fileName,
+}: {
+  src: string;
+  fileName: string;
+}) {
+  const [zoom, setZoom] = useState(1);
+  const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 3));
+  const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.25));
+  const handleResetZoom = () => setZoom(1);
+
+  return (
+    <div className="flex flex-col h-full space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-foreground truncate max-w-sm">{fileName}</span>
+          {dimensions && (
+            <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+              {dimensions.width} × {dimensions.height} px
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" variant="outline" onClick={handleZoomOut} disabled={zoom <= 0.25}>
+            <ZoomOut className="mr-1 size-3.5" />
+            <span>Zoom out</span>
+          </Button>
+          <span className="w-12 text-center font-mono text-xs text-muted-foreground">
+            {Math.round(zoom * 100)}%
+          </span>
+          <Button size="sm" variant="outline" onClick={handleZoomIn} disabled={zoom >= 3}>
+            <ZoomIn className="mr-1 size-3.5" />
+            <span>Zoom in</span>
+          </Button>
+          <Button size="sm" variant="ghost" onClick={handleResetZoom}>
+            <RotateCcw className="mr-1 size-3.5" />
+            <span>Reset</span>
+          </Button>
+          <Button size="sm" variant="outline" asChild>
+            <a href={src} target="_blank" rel="noopener noreferrer" download={fileName}>
+              <Download className="mr-1 size-3.5" />
+              <span>Download</span>
+            </a>
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex min-h-96 flex-1 items-center justify-center overflow-auto rounded-lg border border-border/60 bg-muted/20 p-4">
+        <div
+          className="overflow-hidden rounded-lg border border-border/60 shadow-sm"
+          style={{
+            backgroundImage: "radial-gradient(rgba(120, 120, 120, 0.2) 1px, transparent 1px)",
+            backgroundSize: "16px 16px",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={fileName}
+            style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
+            className="max-h-[65vh] object-contain transition-transform duration-200"
+            onLoad={(e) => {
+              const img = e.currentTarget;
+              setDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+            }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -267,10 +347,20 @@ function FilePanel({
                       }
                     />
                   </>
+                ) : parsedFile.contentType === "image" ? (
+                  <ImageViewer
+                    src={parsedFile.body}
+                    fileName={selectedPath ? selectedPath.split("/").pop() || selectedPath : "Image"}
+                  />
                 ) : parsedFile.contentType === "markdown" ? (
                   <>
                     <TableOfContents content={parsedFile.body} />
-                    <MarkdownRenderer content={parsedFile.body} />
+                    <MarkdownRenderer
+                      content={parsedFile.body}
+                      owner={owner}
+                      repo={repo}
+                      currentFilePath={selectedPath || undefined}
+                    />
                   </>
                 ) : parsedFile.contentType === "yaml" ? (
                   <CodeRenderer content={parsedFile.body} language="yaml" />

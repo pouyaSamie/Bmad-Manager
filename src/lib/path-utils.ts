@@ -150,7 +150,7 @@ export async function scanWorkspaceProjects(): Promise<AvailableLocalProject[]> 
         hasBmad,
       });
     }
-  } catch (err) {
+  } catch {
     // If workspaceRoot is not accessible, quietly return empty list
   }
 

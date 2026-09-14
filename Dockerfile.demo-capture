@@ -1,31 +1,26 @@
-# Dockerfile — bmad-manager
+# Temporary Dockerfile used only to regenerate demo screenshots while the
+# working Dockerfile is being updated independently.
 FROM node:20-alpine AS base
 
 ENV NODE_OPTIONS="--dns-result-order=ipv4first"
 ENV PRISMA_FETCH_TIMEOUT=60000
 ENV PRISMA_ENGINES_CACHE_DIR=/root/.cache/prisma
 
-# Copy local Prisma engine cache to avoid remote CDN timeouts
 COPY docker/prisma-cache/ /root/.cache/prisma/
 
-# Install pnpm and prisma globally with cache
 RUN --mount=type=cache,target=/root/.npm \
     --mount=type=cache,target=/root/.cache/prisma \
-    npm install -g pnpm@11.19.0 prisma@6.19.2
+    npm install -g pnpm@10.28.1 prisma@6.19.2
 
-# Set local prisma engine paths so prisma commands never query remote CDN
 ENV PRISMA_SCHEMA_ENGINE_BINARY=/usr/local/lib/node_modules/prisma/node_modules/@prisma/engines/schema-engine-linux-musl-openssl-3.0.x
 ENV PRISMA_QUERY_ENGINE_LIBRARY=/usr/local/lib/node_modules/prisma/node_modules/@prisma/engines/libquery_engine-linux-musl-openssl-3.0.x.so.node
 
-# --- Dependencies ---
 FROM base AS deps
 WORKDIR /app
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc* ./
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --ignore-scripts \
-      --network-concurrency=4 --fetch-retries=5 --fetch-retry-maxtimeout=180000
+    node /usr/local/lib/node_modules/pnpm/bin/pnpm.cjs install --frozen-lockfile --ignore-scripts
 
-# --- Build ---
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -34,13 +29,12 @@ COPY prisma ./prisma
 ARG DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 ARG BETTER_AUTH_SECRET="build-time-placeholder-secret-not-used-at-runtime"
 ARG BETTER_AUTH_URL="http://localhost:3000"
-RUN pnpm db:generate
+RUN node /usr/local/lib/node_modules/pnpm/bin/pnpm.cjs db:generate
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN --mount=type=cache,target=/app/.next/cache \
-    pnpm build
+    node /usr/local/lib/node_modules/pnpm/bin/pnpm.cjs build
 
-# --- Runner ---
 FROM base AS runner
 WORKDIR /app
 
@@ -55,9 +49,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-# Copie explicite du client Prisma genere (le tracing standalone peut manquer les chemins custom)
 COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
-# Prisma schema + migrations for runtime migrate deploy
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
 USER nextjs

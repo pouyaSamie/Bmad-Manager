@@ -105,12 +105,16 @@ export async function saveAgentGatewayConfig(input: z.infer<typeof agentGatewayS
   } catch (error) { return { success: false, error: sanitizeError(error, "DB_ERROR"), code: "AGENT_GATEWAY_SAVE_FAILED" }; }
 }
 function preview(kind: string, payload: Record<string, unknown>) {
-  if (kind === "install" || kind === "update") return { command: "npx bmad-method install --yes --modules bmm --tools <selected-tools>", writes: ["_bmad/", ".agents/skills/"] };
+  if (kind === "install" || kind === "update") {
+    const tools = Array.isArray(payload.tools) ? payload.tools.join(",") : "codex";
+    const modules = Array.isArray(payload.modules) ? payload.modules.join(",") : "bmm";
+    return { command: `npx bmad-method install --yes --directory <projectRoot> --modules ${modules} --tools ${tools}`, writes: ["_bmad/", ".agents/skills/"] };
+  }
   if (kind === "write_override") return { file: payload.path, content: payload.content, writes: [payload.path] };
   if (kind === "create_agent") return { files: [`.agents/skills/${String(payload.slug)}/SKILL.md`, `_bmad/custom/config${payload.scope === "personal" ? ".user" : ""}.toml`], writes: ["managed custom agent"] };
   if (kind === "customize_agent") return { file: `_bmad/custom/config${payload.scope === "personal" ? ".user" : ""}.toml`, agent: payload.slug, skill: payload.skillName, writes: ["agent override only"] };
   if (kind === "clone_skill") return { file: `.agents/skills/${String(payload.slug)}/SKILL.md`, source: payload.sourceDirectory, assignTo: (payload.assignAgent as { name?: string } | undefined)?.name ?? null, writes: ["managed skill clone"] };
-  if (kind === "set_workflow") return { file: "_bmad/custom/workflow.toml", agentIds: payload.agentIds, writes: ["project workflow override"] };
+  if (kind === "set_workflow") return { file: "_bmad/custom/workflow.toml", agentIds: payload.agentIds, loops: payload.loops, writes: ["project workflow override"] };
   return { file: `.agents/skills/${String(payload.slug)}/SKILL.md`, writes: ["managed custom skill"] };
 }
 
@@ -135,7 +139,27 @@ export async function draftBmadOperation(input: z.infer<typeof operationSchema>)
     const runtime = await runtimeFor(result.repo.id);
     const count = await prisma.bmadAgent.count({ where: { runtimeId: runtime.id, id: { in: agentIds } } });
     if (count !== agentIds.length) return { success: false, error: "Workflow contains an unknown agent", code: "VALIDATION" };
-    payload = { agentIds };
+
+    const rawLoops = Array.isArray(payload.loops) ? payload.loops : [];
+    const validTriggers = new Set(["verdicts", "findings", "needs_revision", "custom"]);
+    const loops: Array<{ id: string; fromAgentId: string; toAgentId: string; trigger: string; description?: string }> = [];
+    for (const item of rawLoops) {
+      if (!item || typeof item !== "object") continue;
+      const l = item as Record<string, unknown>;
+      const fromAgentId = String(l.fromAgentId ?? "");
+      const toAgentId = String(l.toAgentId ?? "");
+      const trigger = String(l.trigger ?? "verdicts");
+      const description = l.description ? String(l.description).slice(0, 500) : "";
+      if (!agentIds.includes(fromAgentId) || !agentIds.includes(toAgentId) || fromAgentId === toAgentId) continue;
+      loops.push({
+        id: String(l.id || `${fromAgentId}->${toAgentId}:${trigger}`),
+        fromAgentId,
+        toAgentId,
+        trigger: validTriggers.has(trigger) ? trigger : "custom",
+        description,
+      });
+    }
+    payload = { agentIds, loops };
   }
   if (parsed.data.kind === "customize_agent") {
     if (!validSkillSlug(String(payload.slug)) || !validSkillSlug(String(payload.skillName))) return { success: false, error: "Invalid agent or skill", code: "VALIDATION" };

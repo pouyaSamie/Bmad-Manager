@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { prisma } from "./db/client";
 import { resolveLocalPath, normalizePathSeparators } from "./path-utils";
 
 export type DiscoveredSkill = {
@@ -130,6 +131,24 @@ export async function discoverBmad(root: string) {
     const customizeSchema = await fs.readFile(path.join(directory, "customize.toml"), "utf8").catch(() => null);
     skills.push({ name: meta.name ?? dirent.name, description: meta.description ?? null, directory: `.agents/skills/${dirent.name}`, source: /Managed by (?:Bmad-Manager|BMAD Manager|MyBMAD)/i.test(skill) ? "managed" : "installed", customizeSchema });
   }
+
+  // Also discover agent skills from .agents/skills if not already in config.toml
+  for (const skill of skills) {
+    if ((skill.name.startsWith("bmad-agent-") || skill.name === "bmad-tea") && !slugs.has(skill.name)) {
+      const isNella = skill.name.includes("po") || skill.name.includes("critic");
+      const isMurat = skill.name.includes("tea");
+      agents.push({
+        slug: skill.name,
+        skillName: skill.name,
+        name: isNella ? "Nella" : isMurat ? "Murat" : skill.name.replace("bmad-agent-", ""),
+        title: isNella ? "Product Owner & Principal Design Critic" : isMurat ? "Quality Advisor" : (skill.description?.slice(0, 60) || "BMad Agent"),
+        icon: isNella ? "👑" : isMurat ? "🧪" : "🤖",
+        description: skill.description,
+        source: skill.source === "managed" ? "managed" : "discovered",
+      });
+    }
+  }
+
   return { projectRoot, installedVersion, agents, skills, config };
 }
 export function validCustomPath(relative: string): boolean {
@@ -140,16 +159,115 @@ export function validSkillSlug(value: string): boolean {
   return /^[a-z0-9][a-z0-9-]{1,62}$/.test(value);
 }
 
-export async function runBmadInstaller(root: string, tools: string[]) {
+export type BmadInstallOptions = {
+  tools?: string[];
+  modules?: string[];
+  userName?: string;
+  communicationLanguage?: string;
+  documentOutputLanguage?: string;
+  outputFolder?: string;
+  channel?: "stable" | "next";
+  shims?: boolean;
+};
+
+export async function runBmadInstaller(root: string, optionsOrTools?: string[] | BmadInstallOptions) {
   const projectRoot = await assertProjectRoot(root);
-  const safeTools = tools.filter((tool) => /^[a-z0-9-]+$/i.test(tool));
-  if (!safeTools.length) throw new Error("At least one supported tool is required");
+  const options: BmadInstallOptions = Array.isArray(optionsOrTools)
+    ? { tools: optionsOrTools }
+    : (optionsOrTools ?? {});
+
+  const safeTools = (options.tools && options.tools.length > 0)
+    ? options.tools.filter((tool) => /^[a-z0-9-]+$/i.test(tool))
+    : ["codex"];
+
+  const safeModules = (options.modules && options.modules.length > 0)
+    ? options.modules.filter((mod) => /^[a-z0-9-]+$/i.test(mod))
+    : ["bmm"];
+
+  const args = [
+    "bmad-method",
+    "install",
+    "--yes",
+    "--directory",
+    projectRoot,
+    "--modules",
+    safeModules.join(","),
+    "--tools",
+    safeTools.join(","),
+  ];
+
+  if (options.userName?.trim()) {
+    args.push("--user-name", options.userName.trim());
+  }
+
+  if (options.communicationLanguage?.trim()) {
+    args.push("--communication-language", options.communicationLanguage.trim());
+  }
+
+  if (options.documentOutputLanguage?.trim()) {
+    args.push("--document-output-language", options.documentOutputLanguage.trim());
+  }
+
+  if (options.outputFolder?.trim()) {
+    args.push("--output-folder", options.outputFolder.trim());
+  }
+
+  if (options.channel === "next") {
+    args.push("--channel", "next");
+  } else {
+    args.push("--channel", "stable");
+  }
+
+  if (options.shims) {
+    args.push("--shims");
+  } else {
+    args.push("--no-shims");
+  }
+
   return new Promise<string>((resolve, reject) => {
-    const child = spawn("npx", ["bmad-method", "install", "--yes", "--modules", "bmm", "--tools", safeTools.join(",")], { cwd: projectRoot, shell: process.platform === "win32" });
+    const child = spawn("npx", args, { cwd: projectRoot, shell: process.platform === "win32" });
     let output = "";
     child.stdout.on("data", (chunk) => { output += chunk.toString(); });
     child.stderr.on("data", (chunk) => { output += chunk.toString(); });
     child.on("error", reject);
     child.on("close", (code) => code === 0 ? resolve(redact(output)) : reject(new Error(redact(output) || `BMad installer exited with ${code}`)));
   });
+}
+
+export async function syncProjectBmadRuntime(repoId: string, projectRoot: string) {
+  const runtime = await prisma.bmadProjectRuntime.upsert({
+    where: { repoId },
+    create: { repoId },
+    update: {},
+  });
+  const found = await discoverBmad(projectRoot);
+  await prisma.$transaction([
+    prisma.bmadProjectRuntime.update({
+      where: { id: runtime.id },
+      data: {
+        installedVersion: found.installedVersion,
+        installStatus: found.skills.length ? "ready" : "not_installed",
+        tools: [".agents"],
+        modules: ["bmm"],
+        lastScannedAt: new Date(),
+      },
+    }),
+    prisma.bmadSkill.deleteMany({ where: { runtimeId: runtime.id, isManaged: false } }),
+    prisma.bmadAgent.deleteMany({ where: { runtimeId: runtime.id, source: "discovered" } }),
+    ...found.skills.map((skill) =>
+      prisma.bmadSkill.upsert({
+        where: { runtimeId_name: { runtimeId: runtime.id, name: skill.name } },
+        create: { runtimeId: runtime.id, ...skill, isManaged: skill.source === "managed" },
+        update: { ...skill, isManaged: skill.source === "managed" },
+      })
+    ),
+    ...found.agents.map((agent) =>
+      prisma.bmadAgent.upsert({
+        where: { runtimeId_slug: { runtimeId: runtime.id, slug: agent.slug } },
+        create: { runtimeId: runtime.id, ...agent },
+        update: agent,
+      })
+    ),
+  ]);
+  return { runtimeId: runtime.id, found };
 }

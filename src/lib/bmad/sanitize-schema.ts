@@ -6,5 +6,21 @@ export const bmadSanitizeSchema = {
   attributes: {
     ...defaultSchema.attributes,
     code: ["className"],
+    img: [
+      ...(defaultSchema.attributes?.img ?? [
+        "alt",
+        "src",
+        "longDesc",
+        "title",
+        "width",
+        "height",
+      ]),
+      "className",
+      "loading",
+    ],
+  },
+  protocols: {
+    ...defaultSchema.protocols,
+    src: ["http", "https", "data"],
   },
 } as const;

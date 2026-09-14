@@ -429,10 +429,19 @@ function extractMetadata(
  */
 export function parseBmadFile(
   content: string,
-  contentType: "markdown" | "yaml" | "json" | "text",
+  contentType: "markdown" | "yaml" | "json" | "text" | "image",
 ): ParsedBmadFile {
   try {
     switch (contentType) {
+      case "image":
+        return {
+          contentType: "image",
+          frontmatter: null,
+          metadata: null,
+          body: content,
+          rawContent: content,
+          parseError: null,
+        };
       case "markdown": {
         const { data, content: body } = matter(content);
         const frontmatter =

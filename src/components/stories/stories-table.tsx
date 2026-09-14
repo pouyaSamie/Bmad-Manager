@@ -9,7 +9,6 @@ import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-colu
 import { StatusBadge } from "@/components/shared/status-badge";
 import { WorkItemBadge } from "@/components/shared/work-item-badge";
 import type { StoryDetail } from "@/lib/bmad/types";
-import { getStoryShortId } from "@/lib/bmad/utils";
 
 const columns: ColumnDef<StoryDetail>[] = [
   { id: "type", header: "Work item type", cell: () => <WorkItemBadge type="story" />, size: 115, enableSorting: false },

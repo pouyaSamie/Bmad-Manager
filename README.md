@@ -1,36 +1,61 @@
 # Bmad Manager
 
-> A self-hosted workspace for understanding, tracking, and safely operating [BMad](https://github.com/bmad-method/bmad-method) projects.
+> A self-hosted command center for [BMad](https://github.com/bmad-method/bmad-method) projects—turning planning files into a clear view of delivery, progress, and controlled project operations.
 
-Bmad Manager turns the planning artifacts already in a BMad project into a practical dashboard. Connect a GitHub repository or a local folder to see epics, stories, sprint progress, and documentation in one place. For local projects, the built-in BMad Control area can discover installed agents and skills, then queue approved, allowlisted maintenance operations for a separate worker.
+BMad Manager is for teams using BMad who want to spend less time opening Markdown and YAML files to answer basic questions: *What are we building? What is in progress? What is blocked? What should happen next?* Connect a GitHub repository or a local BMad folder and get one shared workspace for epics, stories, sprint progress, documentation, and carefully reviewed operations.
 
-![Bmad Manager dashboard](./docs/screen1.png)
+## What it helps you do
 
-## Highlights
+- **See the whole portfolio:** compare project health, completed work, active work, and story counts from one dashboard.
+- **Keep delivery understandable:** move from an epic to its stories and their current state without manually reconciling planning artifacts.
+- **Find the source material quickly:** browse project planning and implementation files beside the delivery view.
+- **Operate local projects carefully:** use BMad Control to inspect agents and skills, preview changes, and send only approved work to a separate worker.
+
+## See it in action
+
+### Start with a portfolio view
+
+The dashboard is the fastest answer to “what is happening across our BMad projects?” It shows active projects, total epics and stories, completed work, and current work in progress before you drill into an individual project.
+
+![Bmad Manager portfolio dashboard](./docs/screen1.png)
+
+### Understand one project at a glance
+
+Open a project to see its sprint progress, velocity, blockers, key planning files, and epic status in one view. This is the page to use during a stand-up or delivery review.
+
+![Atlas Platform project overview](./docs/screen2.png)
+
+### Follow work from epic to outcome
+
+The epic timeline makes progress visible across the plan: completed epics, active epics, and work that has not started yet. Each epic links directly to its work items.
+
+![Epic delivery timeline](./docs/screen3.png)
+
+### Spot delivery flow on the story board
+
+Use the story board to see which work is ready, active, blocked, or complete. Filters let a team focus on a specific epic when planning the next move.
+
+![Story delivery board](./docs/screen4.png)
+
+### Keep planning files close to the work
+
+The library provides a safe in-app browser for BMad planning and implementation artifacts, so you can read the source documents without losing the delivery context.
+
+![Project documentation library](./docs/screen5.png)
+
+### Use BMad Control for reviewed local operations
+
+BMad Control is for local projects that need a deliberate operating surface. It brings agents, skills, workflow stages, model routes, conversations, and the approval queue together; the web app previews and queues approved operations while a separate worker performs them.
+
+![BMad Control workspace](./docs/screen6.png)
+
+## Key capabilities
 
 - Import BMad projects from GitHub or, in self-hosted environments, directly from local folders.
 - Track epics, stories, sprint status, velocity, and supporting planning documents.
 - Read both a single `epics.md` file and split epic files in an `epics/` directory.
-- Browse BMad documentation without leaving the dashboard.
-- Manage branch selection per repository.
-- Authenticate with email/password, with optional GitHub OAuth.
-- Run multi-user installations with user roles.
-- Use **BMad Control** for local projects to discover agents and skills, review changes, and process approved operations through a dedicated worker.
-- Deploy with Docker, PostgreSQL, and Traefik.
-
-## Screenshots
-
-| Project overview | Epic tracking |
-| --- | --- |
-| ![Project overview](./docs/screen2.png) | ![Epic tracking](./docs/screen3.png) |
-
-| Story board | Documentation browser |
-| --- | --- |
-| ![Story board](./docs/screen4.png) | ![Documentation browser](./docs/screen5.png) |
-
-| BMad Control |
-| --- |
-| ![BMad Control](./docs/screen6.png) |
+- Manage repository branches and access with email/password or optional GitHub OAuth.
+- Run multi-user installations with roles, Docker, PostgreSQL, and Traefik.
 
 ## Stack
 
@@ -44,35 +69,11 @@ Bmad Manager turns the planning artifacts already in a BMad project into a pract
 | Testing | Vitest |
 | Deployment | Docker and Traefik |
 
-## Quick start
+## Get started
 
-### Requirements
+### Try the seeded Docker demo
 
-- Node.js 20 or later
-- pnpm 9 or later
-- Docker and Docker Compose (for the included PostgreSQL service)
-
-### Run locally
-
-```bash
-git clone https://github.com/pouyaSamie/Bmad-Manager.git
-cd Bmad-Manager
-pnpm install
-
-# Copy .env.example to .env and fill in the required values.
-docker compose up -d
-pnpm db:migrate
-pnpm db:create-admin --email you@example.com --password your-password --name Admin
-pnpm dev
-```
-
-Open [http://localhost:3002](http://localhost:3002), sign in, and add a GitHub repository or local BMad folder.
-
-For a full description of the environment variables, see [Getting Started](./docs/GETTING_STARTED.md).
-
-### Run the seeded Docker demo
-
-The repository includes a separate, disposable Docker demo with a populated local BMad project. It uses port `3003` for the app and `5434` for PostgreSQL, so it does not affect the regular development stack.
+Want to explore the workspace before importing your own project? The separate, disposable demo includes a populated local BMad project. It uses port `3003` for the app and `5434` for PostgreSQL, so it does not affect the regular development stack.
 
 ```bash
 docker compose -f docker-compose.demo.yml up --build
@@ -91,11 +92,27 @@ The seeded **Atlas Platform** project includes three epics, five stories across 
 docker compose -f docker-compose.demo.yml down -v
 ```
 
-### BMad Control worker
+### Use your own project locally
+
+**Requirements:** Node.js 20+, pnpm 10+, Docker, and Docker Compose.
+
+```bash
+git clone https://github.com/pouyaSamie/Bmad-Manager.git
+cd Bmad-Manager
+pnpm install
+
+# Copy .env.example to .env and fill in the required values.
+docker compose up -d
+pnpm db:migrate
+pnpm db:create-admin --email you@example.com --password your-password --name Admin
+pnpm dev
+```
+
+Open [http://localhost:3002](http://localhost:3002), sign in, then add a GitHub repository or local BMad folder. For environment variables and detailed setup, read [Getting Started](./docs/GETTING_STARTED.md).
+
+### Run the BMad Control worker
 
 BMad Control is available for imported local projects. It uses encrypted gateway credentials and a dedicated worker, so the web application does not execute queued operations itself.
-
-The control workspace brings a project’s installed agents, skills, workflow stages, model routes, conversations, and reviewable operations into one place. It is designed to keep project changes deliberate: operations are previewed, approved, queued, and then processed by the dedicated worker rather than executed directly by the web app.
 
 Add a stable 32-byte base64url `AGENT_ENCRYPTION_KEY` to `.env`, then run the application and worker in separate terminals:
 

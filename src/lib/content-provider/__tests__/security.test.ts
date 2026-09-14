@@ -102,8 +102,8 @@ describe("LocalProvider Security", () => {
       const provider = new LocalProvider(tmpDir);
       const tree = await provider.getTree();
 
-      expect(tree.paths).not.toContain(path.join("_bmad", "linked.txt"));
-      expect(tree.paths).toContain(path.join("_bmad", "sub", "safe.txt"));
+      expect(tree.paths).not.toContain("_bmad/linked.txt");
+      expect(tree.paths).toContain("_bmad/sub/safe.txt");
 
       await fs.unlink(outsideFile);
     });
@@ -147,10 +147,8 @@ describe("LocalProvider Security", () => {
       const provider = new LocalProvider(tmpDir, { maxDepth: 2 });
       const tree = await provider.getTree();
 
-      expect(tree.paths).toContain(path.join("_bmad", "shallow.txt"));
-      expect(tree.paths).not.toContain(
-        path.join("_bmad", "a", "b", "c", "deep.txt")
-      );
+      expect(tree.paths).toContain("_bmad/shallow.txt");
+      expect(tree.paths).not.toContain("_bmad/a/b/c/deep.txt");
     });
   });
 });

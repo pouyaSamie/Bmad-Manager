@@ -28,7 +28,12 @@ import { getAuthenticatedSession } from "@/lib/db/helpers";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { z } from "zod";
 import { createHash } from "node:crypto";
-import path from "node:path";
+import fs from "node:fs/promises";
+import {
+  runBmadInstaller,
+  syncProjectBmadRuntime,
+  type BmadInstallOptions,
+} from "@/lib/bmad-control";
 import type { GitHubRepo } from "@/lib/github/types";
 import type { FileTreeNode, ParsedBmadFile } from "@/lib/bmad/types";
 import type { ActionResult } from "@/lib/types";
@@ -676,7 +681,7 @@ export async function fetchFileContent(input: {
 }): Promise<
   ActionResult<{
     content: string;
-    contentType: "markdown" | "yaml" | "json" | "text";
+    contentType: "markdown" | "yaml" | "json" | "text" | "image";
   }>
 > {
   const parsed = fetchFileContentSchema.safeParse(input);
@@ -702,10 +707,17 @@ export async function fetchFileContent(input: {
   }
 
   const ext = parsed.data.path.split(".").pop()?.toLowerCase() ?? "";
-  let contentType: "markdown" | "yaml" | "json" | "text" = "text";
+  const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "svg", "webp", "gif", "bmp", "ico"]);
+  let contentType: "markdown" | "yaml" | "json" | "text" | "image" = "text";
   if (ext === "md") contentType = "markdown";
   else if (ext === "yaml" || ext === "yml") contentType = "yaml";
   else if (ext === "json") contentType = "json";
+  else if (IMAGE_EXTS.has(ext)) contentType = "image";
+
+  if (contentType === "image") {
+    const rawUrl = `/api/repo/${encodeURIComponent(parsed.data.owner)}/${encodeURIComponent(parsed.data.name)}/raw?path=${encodeURIComponent(parsed.data.path)}`;
+    return { success: true, data: { content: rawUrl, contentType: "image" } };
+  }
 
   try {
     let content: string;
@@ -824,6 +836,18 @@ const importLocalFolderSchema = z.object({
     .refine((p) => !p.includes("\0"), { message: "Invalid path" }) // F12: null bytes
     .refine((p) => !/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(p), { message: "Invalid path" }), // F33
   displayName: z.string().min(1).max(255).trim().optional(),
+  installOptions: z
+    .object({
+      modules: z.array(z.string().regex(/^[a-z0-9_-]+$/i)).optional(),
+      tools: z.array(z.string().regex(/^[a-z0-9_-]+$/i)).optional(),
+      userName: z.string().max(100).optional(),
+      communicationLanguage: z.string().max(50).optional(),
+      documentOutputLanguage: z.string().max(50).optional(),
+      outputFolder: z.string().max(100).regex(/^[a-z0-9_.-]+$/i).optional(),
+      channel: z.enum(["stable", "next"]).optional(),
+      shims: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 function shortHash(value: string): string {
@@ -839,11 +863,13 @@ function sanitizeBasename(name: string): string {
 
 /**
  * Import a local folder as a BMAD project.
- * F2: All FS operations go through LocalProvider (no direct fs calls).
+ * Automatically installs BMAD Core + BMM module if neither _bmad nor _bmad-output exists.
+ * F2: All FS operations go through LocalProvider (no direct fs calls except mkdir).
  */
 export async function importLocalFolder(input: {
   localPath: string;
   displayName?: string;
+  installOptions?: BmadInstallOptions;
 }): Promise<
   ActionResult<{ id: string; owner: string; name: string; displayName: string }>
 > {
@@ -873,21 +899,22 @@ export async function importLocalFolder(input: {
   try {
     // F2: Delegate all FS operations to LocalProvider with cross-platform path resolution
     const resolvedPath = resolveLocalPath(parsed.data.localPath);
+    // Ensure the folder exists on disk (creates directory for new projects)
+    await fs.mkdir(resolvedPath, { recursive: true });
+
     const provider = new LocalProvider(resolvedPath);
     await provider.validateRoot();
 
-    const providerTree = await provider.getTree();
+    let providerTree = await provider.getTree();
 
-    // F36: Check for _bmad or _bmad-output in rootDirectories
+    // Check for _bmad or _bmad-output in rootDirectories
     const hasBmad = providerTree.rootDirectories.some(
       (d) => d === "_bmad" || d === "_bmad-output"
     );
     if (!hasBmad) {
-      return {
-        success: false,
-        error: "No _bmad or _bmad-output directory found in this folder.",
-        code: "NO_BMAD",
-      };
+      // Automatically install BMAD Core + modules & tools
+      await runBmadInstaller(resolvedPath, parsed.data.installOptions);
+      providerTree = await provider.getTree();
     }
 
     // F7/F19/F45: URL-safe name with collision-resistant hash
@@ -921,6 +948,13 @@ export async function importLocalFolder(input: {
       },
       select: { id: true, owner: true, name: true, displayName: true },
     });
+
+    // Automatically initialize runtime and discover installed skills & agents
+    try {
+      await syncProjectBmadRuntime(repo.id, resolvedPath);
+    } catch (syncError) {
+      console.warn("[importLocalFolder] Initial BMad runtime sync failed:", syncError);
+    }
 
     revalidatePath("/(dashboard)");
     return { success: true, data: repo };
