@@ -1,16 +1,16 @@
 {
-  "name": "my-bmad",
+  "name": "bmad-manager",
   "version": "0.1.0",
   "description": "A web dashboard to visualize and track BMAD (Breakthrough Method of Agile AI-Driven Development) projects from GitHub repositories.",
   "license": "MIT",
   "author": "Hichem (DevHDI)",
-  "homepage": "https://github.com/DevHDI/my-bmad",
+  "homepage": "https://github.com/pouyaSamie/Bmad-Manager",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DevHDI/my-bmad.git"
+    "url": "https://github.com/pouyaSamie/Bmad-Manager.git"
   },
   "bugs": {
-    "url": "https://github.com/DevHDI/my-bmad/issues"
+    "url": "https://github.com/pouyaSamie/Bmad-Manager/issues"
   },
   "keywords": [
     "bmad",

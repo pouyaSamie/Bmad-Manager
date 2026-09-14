@@ -1,4 +1,4 @@
-# Production Docker Compose — my-bmad
+# Production Docker Compose — bmad-manager
 # Usage: docker compose -f docker/docker-compose.prod.yml up -d
 #
 # TWO environment files are required:
@@ -9,7 +9,7 @@
 #
 # 2. .env.local (project root) — Runtime variables for the Next.js container
 #    Contains: BETTER_AUTH_SECRET, BETTER_AUTH_URL, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
-#    These variables are injected into the my-bmad container via env_file
+#    These variables are injected into the bmad-manager container via env_file
 
 services:
   # Reverse proxy with automatic HTTPS via Let's Encrypt
@@ -37,7 +37,7 @@ services:
       - web
 
   # Next.js application
-  my-bmad:
+  bmad-manager:
     build:
       context: ..
       dockerfile: Dockerfile

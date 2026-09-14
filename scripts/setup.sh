@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# MyBMAD Dashboard — Quick Setup Script
+# BMAD Manager — Quick Setup Script
 # =============================================================================
 # Creates a .env file with auto-generated secrets and sensible defaults.
 # You only need to fill in the GitHub OAuth credentials manually afterward.
@@ -24,7 +24,7 @@ else
   GREEN='' YELLOW='' CYAN='' BOLD='' NC=''
 fi
 
-echo -e "${BOLD}MyBMAD Dashboard — Environment Setup${NC}"
+echo -e "${BOLD}BMAD Manager — Environment Setup${NC}"
 echo ""
 
 # ------------------------------------------------------------------
@@ -88,7 +88,7 @@ echo ""
 echo -e "  ${CYAN}1.${NC} Create a GitHub OAuth App:"
 echo "     https://github.com/settings/developers → New OAuth App"
 echo ""
-echo "     Application name:       MyBMAD (or anything)"
+echo "     Application name:       BMAD Manager (or anything)"
 echo "     Homepage URL:           http://localhost:3000"
 echo "     Authorization callback: http://localhost:3000/api/auth/callback/github"
 echo ""

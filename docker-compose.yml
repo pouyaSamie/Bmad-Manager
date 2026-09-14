@@ -1,17 +1,15 @@
-# Development Docker Compose — PostgreSQL only
-# For production with Traefik and HTTPS, use: docker compose -f docker/docker-compose.prod.yml up -d
+name: bmad-manager
 
 services:
   postgres:
+    container_name: bmad-manager-postgres
     image: postgres:17.4-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: bmad_dashboard
-      POSTGRES_USER: bmad
-      POSTGRES_PASSWORD: bmad_dev_password
+      POSTGRES_DB: ${POSTGRES_DB:-bmad_dashboard}
+      POSTGRES_USER: ${POSTGRES_USER:-bmad}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bmad_dev_password}
     ports:
-      # DEV ONLY: exposed on host for Prisma Studio/CLI. In production, remove this
-      # section and let services communicate over the internal Docker network only.
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -21,8 +19,37 @@ services:
       timeout: 2s
       retries: 20
 
-# NOTE: In development, run the app with `pnpm dev` (hot reload, fast refresh).
-# This file only provides PostgreSQL. For production, see docker/docker-compose.prod.yml.
+  web:
+    container_name: bmad-manager-web
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bmad}:${POSTGRES_PASSWORD:-bmad_dev_password}@postgres:5432/${POSTGRES_DB:-bmad_dashboard}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-bmad_secret_dev_key_pouya_local_2026_secure_key}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3002}
+      ENABLE_LOCAL_FS: ${ENABLE_LOCAL_FS:-true}
+      LOCAL_WORKSPACE_PATH: ${LOCAL_WORKSPACE_PATH:-/workspace}
+      LOCAL_HOST_WORKSPACE: ${LOCAL_HOST_WORKSPACE:-C:/workspace}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET:-}
+      AGENT_ENCRYPTION_KEY: ${AGENT_ENCRYPTION_KEY:-}
+      GITHUB_PAT: ${GITHUB_PAT:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      SESSION_EXPIRES_IN: ${SESSION_EXPIRES_IN:-604800}
+      SESSION_UPDATE_AGE: ${SESSION_UPDATE_AGE:-86400}
+      PORT: 3000
+      HOSTNAME: "0.0.0.0"
+    volumes:
+      - C:/workspace:/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+

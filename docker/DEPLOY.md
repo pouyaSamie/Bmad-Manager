@@ -1,4 +1,4 @@
-# Production Deployment Guide — my-bmad
+# Production Deployment Guide — bmad-manager
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ Two files are required at the project root:
 
 ```bash
 # Domain for Traefik and Let's Encrypt
-DOMAIN=mybmad.example.com
+DOMAIN=bmad-manager.example.com
 ACME_EMAIL=admin@example.com
 
 # PostgreSQL credentials
@@ -30,10 +30,10 @@ POSTGRES_PASSWORD=a_strong_password_here
 ```bash
 # Better Auth
 BETTER_AUTH_SECRET=generate_with_openssl_rand_base64_32
-BETTER_AUTH_URL=https://mybmad.example.com
+BETTER_AUTH_URL=https://bmad-manager.example.com
 
 # GitHub OAuth (create an app at https://github.com/settings/developers)
-# Callback URL: https://mybmad.example.com/api/auth/callback/github
+# Callback URL: https://bmad-manager.example.com/api/auth/callback/github
 GITHUB_CLIENT_ID=your_client_id
 GITHUB_CLIENT_SECRET=your_client_secret
 ```
@@ -61,7 +61,7 @@ docker compose --env-file .env -f docker/docker-compose.prod.yml up -d
 After the first deployment or after a Prisma schema update:
 
 ```bash
-docker compose --env-file .env -f docker/docker-compose.prod.yml exec my-bmad npx prisma migrate deploy
+docker compose --env-file .env -f docker/docker-compose.prod.yml exec bmad-manager npx prisma migrate deploy
 ```
 
 This command applies pending migrations to the production database. It must be run:
@@ -77,13 +77,13 @@ This command applies pending migrations to the production database. It must be r
 docker compose --env-file .env -f docker/docker-compose.prod.yml ps
 
 # Check the health endpoint
-curl https://mybmad.example.com/api/health
+curl https://bmad-manager.example.com/api/health
 
 # Check Traefik logs
 docker compose --env-file .env -f docker/docker-compose.prod.yml logs traefik
 
 # Check application logs
-docker compose --env-file .env -f docker/docker-compose.prod.yml logs my-bmad
+docker compose --env-file .env -f docker/docker-compose.prod.yml logs bmad-manager
 ```
 
 ## 5. Let's Encrypt Certificates
@@ -98,10 +98,10 @@ Certificates are automatically obtained and renewed by Traefik via the TLS chall
 
 ```bash
 # Rebuild and restart the application
-docker compose --env-file .env -f docker/docker-compose.prod.yml up -d --build my-bmad
+docker compose --env-file .env -f docker/docker-compose.prod.yml up -d --build bmad-manager
 
 # Apply migrations if the schema has changed
-docker compose --env-file .env -f docker/docker-compose.prod.yml exec my-bmad npx prisma migrate deploy
+docker compose --env-file .env -f docker/docker-compose.prod.yml exec bmad-manager npx prisma migrate deploy
 ```
 
 ## 7. Shutdown

@@ -15,3 +15,15 @@ docs
 # Seul README.md est conserve
 *.md
 !README.md
+
+# Tooling, tests & temporary files
+.vscode
+.turbo
+dist
+coverage
+*.test.ts
+*.test.tsx
+**/__tests__/**
+*.log
+src/generated
+
