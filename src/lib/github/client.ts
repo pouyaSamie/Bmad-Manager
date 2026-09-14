@@ -48,7 +48,7 @@ export async function getGitHubToken(
     select: { accessToken: true },
   });
 
-  return account?.accessToken ?? null;
+  return account?.accessToken ?? process.env.GITHUB_PAT ?? null;
 }
 
 // ---------------------------------------------------------------------------

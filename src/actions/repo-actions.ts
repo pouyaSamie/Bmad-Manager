@@ -9,6 +9,12 @@ import {
   getCachedUserRawContent,
 } from "@/lib/github/client";
 import { LocalProvider } from "@/lib/content-provider/local-provider";
+import {
+  resolveLocalPath,
+  getCrossPlatformBasename,
+  scanWorkspaceProjects,
+  type AvailableLocalProject,
+} from "@/lib/path-utils";
 import { buildFileTree } from "@/lib/bmad/utils";
 import { parseBmadFile } from "@/lib/bmad/parser";
 import {
@@ -865,8 +871,9 @@ export async function importLocalFolder(input: {
   }
 
   try {
-    // F2: Delegate all FS operations to LocalProvider
-    const provider = new LocalProvider(parsed.data.localPath);
+    // F2: Delegate all FS operations to LocalProvider with cross-platform path resolution
+    const resolvedPath = resolveLocalPath(parsed.data.localPath);
+    const provider = new LocalProvider(resolvedPath);
     await provider.validateRoot();
 
     const providerTree = await provider.getTree();
@@ -884,9 +891,9 @@ export async function importLocalFolder(input: {
     }
 
     // F7/F19/F45: URL-safe name with collision-resistant hash
-    const rawBasename = path.basename(parsed.data.localPath);
+    const rawBasename = getCrossPlatformBasename(parsed.data.localPath);
     const sanitizedBasename = sanitizeBasename(rawBasename);
-    const hash = shortHash(parsed.data.localPath);
+    const hash = shortHash(resolvedPath);
     const repoName = `${sanitizedBasename}-${hash}`;
 
     // F11: displayName fallback to raw basename
@@ -907,7 +914,7 @@ export async function importLocalFolder(input: {
         branch: "local",
         displayName,
         sourceType: "local",
-        localPath: parsed.data.localPath,
+        localPath: resolvedPath,
         totalFiles: bmadOutputCount,
         lastSyncedAt: new Date(),
         userId,
@@ -935,6 +942,27 @@ export async function importLocalFolder(input: {
     if (msg === "LOCAL_DISABLED") {
       return { success: false, error: sanitizeError(error, "LOCAL_DISABLED"), code: "LOCAL_DISABLED" };
     }
+    return { success: false, error: sanitizeError(error, "FS_ERROR"), code: "FS_ERROR" };
+  }
+}
+
+/**
+ * Scan the workspace for available local project folders and detect if they contain BMAD artifacts.
+ */
+export async function getAvailableLocalProjects(): Promise<
+  ActionResult<AvailableLocalProject[]>
+> {
+  if (process.env.ENABLE_LOCAL_FS !== "true") {
+    return { success: false, error: sanitizeError(null, "LOCAL_DISABLED"), code: "LOCAL_DISABLED" };
+  }
+
+  const authResult = await requireAuthenticated();
+  if (!authResult.success) return authResult;
+
+  try {
+    const projects = await scanWorkspaceProjects();
+    return { success: true, data: projects };
+  } catch (error) {
     return { success: false, error: sanitizeError(error, "FS_ERROR"), code: "FS_ERROR" };
   }
 }

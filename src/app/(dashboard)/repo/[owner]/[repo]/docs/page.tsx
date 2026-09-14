@@ -18,7 +18,7 @@ export default async function DocsPage({
   const { owner, repo: repoName } = await params;
   const { file: initialFile } = await searchParams;
   const userId = await getAuthenticatedUserId();
-  if (!userId) redirect("/login");
+  if (!userId) redirect("/login?error=session_expired");
 
   const repoConfig = await getAuthenticatedRepoConfig(userId, owner, repoName);
   if (!repoConfig) return notFound();

@@ -86,7 +86,13 @@ export function LoginForm({ githubEnabled, registrationEnabled }: LoginFormProps
     }
   }
 
-  const displayError = error ?? (urlError ? "Sign-in failed. Please try again." : null);
+  const displayError =
+    error ??
+    (urlError === "session_expired"
+      ? "Your session has expired. Please sign in again."
+      : urlError
+        ? "Sign-in failed. Please try again."
+        : null);
 
   return (
     <Card className="glass-card w-full max-w-sm">

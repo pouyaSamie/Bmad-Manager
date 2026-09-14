@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { resolveLocalPath, normalizePathSeparators } from "./path-utils";
 
 export type DiscoveredSkill = {
   name: string;
@@ -53,15 +54,20 @@ export function redact(value: string): string {
 }
 
 export function safeChild(root: string, relative: string): string {
-  if (!relative || path.isAbsolute(relative) || relative.includes("\0")) throw new Error("Invalid project-relative path");
-  const resolvedRoot = path.resolve(root);
-  const resolved = path.resolve(resolvedRoot, relative);
-  if (!resolved.startsWith(resolvedRoot + path.sep)) throw new Error("Path escapes the project root");
+  const normRel = normalizePathSeparators(relative);
+  if (!normRel || path.isAbsolute(normRel) || normRel.includes("\0") || normRel.startsWith("/")) {
+    throw new Error("Invalid project-relative path");
+  }
+  const resolvedRoot = resolveLocalPath(root);
+  const resolved = path.resolve(resolvedRoot, normRel);
+  if (!resolved.startsWith(resolvedRoot + path.sep) && resolved !== resolvedRoot) {
+    throw new Error("Path escapes the project root");
+  }
   return resolved;
 }
 
 export async function assertProjectRoot(root: string): Promise<string> {
-  const resolved = path.resolve(root);
+  const resolved = resolveLocalPath(root);
   const stat = await fs.stat(resolved);
   if (!stat.isDirectory()) throw new Error("Project folder is not available");
   return resolved;
@@ -122,7 +128,7 @@ export async function discoverBmad(root: string) {
     if (!skill) continue;
     const meta = frontmatter(skill);
     const customizeSchema = await fs.readFile(path.join(directory, "customize.toml"), "utf8").catch(() => null);
-    skills.push({ name: meta.name ?? dirent.name, description: meta.description ?? null, directory: `.agents/skills/${dirent.name}`, source: skill.includes("Managed by MyBMAD") ? "managed" : "installed", customizeSchema });
+    skills.push({ name: meta.name ?? dirent.name, description: meta.description ?? null, directory: `.agents/skills/${dirent.name}`, source: /Managed by (?:Bmad-Manager|BMAD Manager|MyBMAD)/i.test(skill) ? "managed" : "installed", customizeSchema });
   }
   return { projectRoot, installedVersion, agents, skills, config };
 }

@@ -43,7 +43,7 @@ async function execute(operation: Awaited<ReturnType<typeof nextOperation>>) {
     const workflowPath = safeChild(root, "_bmad/custom/workflow.toml");
     const slugs = ordered.map((agent) => `"${agent.slug}"`).join(", ");
     await fs.mkdir(path.dirname(workflowPath), { recursive: true });
-    await fs.writeFile(workflowPath, `# Managed by MyBMAD. Project workflow order.\n[workflow]\nagents = [${slugs}]\n`, "utf8");
+    await fs.writeFile(workflowPath, `# Managed by Bmad-Manager. Project workflow order.\n[workflow]\nagents = [${slugs}]\n`, "utf8");
     await prisma.bmadProjectRuntime.update({ where: { id: operation.runtime.id }, data: { workflow: { agentIds } } });
     return `Updated workflow with ${ordered.length} agents`;
   }
@@ -68,7 +68,7 @@ async function execute(operation: Awaited<ReturnType<typeof nextOperation>>) {
     const persona = String(payload.persona ?? description);
     const skillDir = safeChild(root, `.agents/skills/${slug}`);
     await fs.mkdir(skillDir, { recursive: true });
-    const skill = typeof payload.content === "string" ? payload.content : `---\nname: ${slug}\ndescription: ${description}\n---\n\n# ${name} — ${title}\n\n<!-- Managed by MyBMAD. Customize through MyBMAD or _bmad/custom/. -->\n\nYou are ${name}, ${title}.\n\n## Persona\n\n${persona}\n\nWork only on approved project operations. Explain proposed writes before requesting approval.\n`;
+    const skill = typeof payload.content === "string" ? payload.content : `---\nname: ${slug}\ndescription: ${description}\n---\n\n# ${name} — ${title}\n\n<!-- Managed by Bmad-Manager. Customize through Bmad-Manager or _bmad/custom/. -->\n\nYou are ${name}, ${title}.\n\n## Persona\n\n${persona}\n\nWork only on approved project operations. Explain proposed writes before requesting approval.\n`;
     await fs.writeFile(path.join(skillDir, "SKILL.md"), skill, "utf8");
     if (operation.kind === "clone_skill" && payload.assignAgent && typeof payload.assignAgent === "object") await writeAgentOverride(root, payload.assignAgent as Record<string, unknown>);
     if (operation.kind === "create_agent") {

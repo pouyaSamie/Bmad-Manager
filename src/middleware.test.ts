@@ -45,6 +45,14 @@ describe("middleware", () => {
     expect(new URL(res.headers.get("location")!).pathname).toBe("/");
   });
 
+  it("clears stale cookie and allows /login when error param is present", () => {
+    const req = createRequest("/login?error=session_expired", SESSION_COOKIE);
+    const res = middleware(req);
+
+    expect(res.status).toBe(200);
+    expect(res.cookies.get("better-auth.session_token")?.value).toBe("");
+  });
+
   it("allows authenticated user to access routes", () => {
     const req = createRequest("/dashboard", SESSION_COOKIE);
     const res = middleware(req);

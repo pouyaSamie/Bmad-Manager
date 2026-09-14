@@ -43,7 +43,7 @@ function getSprintProgress(project: {
 export default async function RepoOverviewPage({ params }: RepoPageProps) {
   const { owner, repo: repoName } = await params;
   const userId = await getAuthenticatedUserId();
-  if (!userId) redirect("/login");
+  if (!userId) redirect("/login?error=session_expired");
 
   const repoConfig = await getAuthenticatedRepoConfig(userId, owner, repoName);
   if (!repoConfig) return notFound();

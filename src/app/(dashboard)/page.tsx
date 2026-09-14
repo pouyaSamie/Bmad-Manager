@@ -15,7 +15,7 @@ const localFsEnabled = process.env.ENABLE_LOCAL_FS === "true";
 
 export default async function DashboardPage() {
   const userId = await getAuthenticatedUserId();
-  if (!userId) redirect("/login");
+  if (!userId) redirect("/login?error=session_expired");
 
   const repos = await getAuthenticatedRepos(userId);
 

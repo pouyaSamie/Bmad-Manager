@@ -15,14 +15,14 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await getAuthenticatedSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/login?error=session_expired");
 
   const repos = await getAuthenticatedRepos(session.userId);
 
   const localFsEnabled = process.env.ENABLE_LOCAL_FS === "true";
   const hasGitHubOAuth =
     !!process.env.GITHUB_CLIENT_ID && !!process.env.GITHUB_CLIENT_SECRET;
-  const hasGitHubToken = hasGitHubOAuth
+  const hasGitHubToken = hasGitHubOAuth || !!process.env.GITHUB_PAT
     ? !!(await getGitHubToken(session.userId))
     : false;
 

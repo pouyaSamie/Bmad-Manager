@@ -30,8 +30,10 @@ import {
   detectBmadRepos,
   importRepo,
   importLocalFolder,
+  getAvailableLocalProjects,
 } from "@/actions/repo-actions";
 import type { GitHubRepo } from "@/lib/github/types";
+import type { AvailableLocalProject } from "@/lib/path-utils";
 
 interface AddRepoDialogProps {
   trigger?: React.ReactNode;
@@ -66,6 +68,8 @@ export function AddRepoDialog({
   const [localPath, setLocalPath] = useState("");
   const [localImporting, setLocalImporting] = useState(false);
   const [localError, setLocalError] = useState("");
+  const [detectedProjects, setDetectedProjects] = useState<AvailableLocalProject[]>([]);
+  const [scanningProjects, setScanningProjects] = useState(false);
 
   const defaultTab = githubEnabled ? "github" : "local";
 
@@ -140,6 +144,14 @@ export function AddRepoDialog({
     if (nextOpen && githubEnabled) {
       fetchRepos();
     }
+    if (nextOpen && localFsEnabled) {
+      setScanningProjects(true);
+      getAvailableLocalProjects()
+        .then((res) => {
+          if (res.success) setDetectedProjects(res.data);
+        })
+        .finally(() => setScanningProjects(false));
+    }
     if (!nextOpen) {
       setLocalPath("");
       setLocalError("");
@@ -186,6 +198,21 @@ export function AddRepoDialog({
     setLocalError("");
 
     const result = await importLocalFolder({ localPath: localPath.trim() });
+
+    if (result.success) {
+      setOpen(false);
+      router.refresh();
+    } else {
+      setLocalError(result.error);
+    }
+    setLocalImporting(false);
+  }
+
+  async function handleQuickImport(projectPath: string) {
+    setLocalImporting(true);
+    setLocalError("");
+
+    const result = await importLocalFolder({ localPath: projectPath });
 
     if (result.success) {
       setOpen(false);
@@ -246,6 +273,9 @@ export function AddRepoDialog({
                 setLocalPath={setLocalPath}
                 localImporting={localImporting}
                 localError={localError}
+                detectedProjects={detectedProjects}
+                scanningProjects={scanningProjects}
+                onQuickImport={handleQuickImport}
                 onSubmit={handleImportLocal}
               />
             </TabsContent>
@@ -256,6 +286,9 @@ export function AddRepoDialog({
             setLocalPath={setLocalPath}
             localImporting={localImporting}
             localError={localError}
+            detectedProjects={detectedProjects}
+            scanningProjects={scanningProjects}
+            onQuickImport={handleQuickImport}
             onSubmit={handleImportLocal}
           />
         ) : (
@@ -428,33 +461,86 @@ function LocalFolderForm({
   setLocalPath,
   localImporting,
   localError,
+  detectedProjects = [],
+  scanningProjects = false,
+  onQuickImport,
   onSubmit,
 }: {
   localPath: string;
   setLocalPath: (v: string) => void;
   localImporting: boolean;
   localError: string;
+  detectedProjects?: AvailableLocalProject[];
+  scanningProjects?: boolean;
+  onQuickImport: (path: string) => void;
   onSubmit: (e: React.FormEvent) => void;
 }) {
   return (
     <form onSubmit={onSubmit} className="space-y-4 pt-2">
+      {scanningProjects ? (
+        <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>Scanning workspace for BMAD projects...</span>
+        </div>
+      ) : detectedProjects.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Detected in Workspace
+          </p>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-lg border p-2">
+            {detectedProjects.map((proj) => (
+              <div
+                key={proj.path}
+                className="flex items-center justify-between gap-3 rounded-md p-2 hover:bg-muted/60 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <FolderOpen className="h-4 w-4 text-primary shrink-0" />
+                    <span className="text-sm font-medium truncate">{proj.name}</span>
+                    {proj.hasBmad && (
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                        BMAD
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate mt-0.5 font-mono">
+                    {proj.displayPath}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="h-7 px-3 text-xs shrink-0"
+                  disabled={localImporting}
+                  onClick={() => onQuickImport(proj.path)}
+                >
+                  {localImporting ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    "Import"
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">
-          Enter the absolute path to a local folder containing{" "}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">_bmad/</code>{" "}
-          or{" "}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">
-            _bmad-output/
-          </code>
-          .
-        </p>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          {detectedProjects.length > 0 ? "Or Enter Path Manually" : "Folder Path"}
+        </label>
         <Input
-          placeholder="/home/user/my-project"
+          placeholder="C:\workspace\your-project or /workspace/your-project"
           value={localPath}
           onChange={(e) => setLocalPath(e.target.value)}
           disabled={localImporting}
           autoComplete="off"
         />
+        <p className="text-xs text-muted-foreground">
+          Supports Windows paths (e.g. <code>C:\workspace\project</code>) or Linux/Docker paths. The folder must contain a <code>_bmad/</code> or <code>_bmad-output/</code> directory.
+        </p>
       </div>
 
       {localError && (

@@ -14,7 +14,7 @@ interface EpicsPageProps {
 export default async function EpicsPage({ params }: EpicsPageProps) {
   const { owner, repo: repoName } = await params;
   const userId = await getAuthenticatedUserId();
-  if (!userId) redirect("/login");
+  if (!userId) redirect("/login?error=session_expired");
 
   const repoConfig = await getAuthenticatedRepoConfig(userId, owner, repoName);
   if (!repoConfig) return notFound();

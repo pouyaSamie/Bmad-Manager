@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
+import { resolveLocalPath, normalizePathSeparators } from "@/lib/path-utils";
 import type { ContentProvider, ContentProviderTree } from "./types";
 import { LOCAL_PROVIDER_DEFAULTS } from "./types";
 
@@ -38,7 +39,7 @@ export class LocalProvider implements ContentProvider {
       );
     }
 
-    this.resolvedRoot = path.resolve(rootPath);
+    this.resolvedRoot = resolveLocalPath(rootPath);
     this.maxFileSizeBytes =
       options?.maxFileSizeBytes ?? LOCAL_PROVIDER_DEFAULTS.maxFileSizeBytes;
     this.maxFileCount =
@@ -174,7 +175,8 @@ export class LocalProvider implements ContentProvider {
         }
 
         const fullPath = path.join(dir, dirent.name);
-        paths.push(path.relative(this.resolvedRoot, fullPath));
+        const relPath = path.relative(this.resolvedRoot, fullPath);
+        paths.push(normalizePathSeparators(relPath));
       }
     };
 
@@ -224,13 +226,14 @@ export class LocalProvider implements ContentProvider {
       throw new Error("Invalid path: unsupported characters");
     }
 
-    const resolved = path.resolve(this.resolvedRoot, filePath);
+    const normalized = normalizePathSeparators(filePath);
+    const resolved = path.resolve(this.resolvedRoot, normalized);
     if (!resolved.startsWith(this.resolvedRoot + path.sep) && resolved !== this.resolvedRoot) {
       throw new Error("Path traversal detected");
     }
 
     // Guard 7 — Restrict access to BMAD directories only
-    const firstSegment = filePath.split(path.sep)[0];
+    const firstSegment = normalized.split("/")[0];
     if (!this.bmadDirs.has(firstSegment)) {
       throw new Error("Access denied: only BMAD directories are accessible");
     }
