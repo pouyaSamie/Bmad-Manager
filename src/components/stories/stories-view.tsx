@@ -1,45 +1,184 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Columns3, LayoutList } from "lucide-react";
-import { StoryFilters, type Filter } from "./story-filters";
+import { StoryFilters, createFilter, type Filter } from "./story-filters";
 import { StoriesTable } from "./stories-table";
 import { KanbanBoard } from "./kanban-board";
 import { StaggeredList, StaggeredItem } from "@/components/shared/staggered-list";
 import type { StoryDetail, Epic } from "@/lib/bmad/types";
 
-interface StoriesViewProps { stories: StoryDetail[]; epics: Epic[]; }
+interface StoriesViewProps {
+  stories: StoryDetail[];
+  epics: Epic[];
+  initialView?: "table" | "kanban";
+  initialEpic?: string;
+}
 
-export function StoriesView({ stories, epics }: StoriesViewProps) {
-  const [view, setView] = useState<"table" | "kanban">("table");
-  const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<Filter<string>[]>([]);
-  const applyFilters = useCallback((story: StoryDetail) => {
-    for (const filter of filters) {
-      if (filter.field === "status" && filter.values.length > 0) {
-        const match = filter.operator === "is_not" || filter.operator === "is_not_any_of" ? !filter.values.includes(story.status) : filter.values.includes(story.status);
-        if (!match) return false;
-      }
-      if (filter.field === "epicId" && filter.values.length > 0) {
-        const match = filter.operator === "is_not" || filter.operator === "is_not_any_of" ? !filter.values.includes(story.epicId) : filter.values.includes(story.epicId);
-        if (!match) return false;
-      }
+export function StoriesView({
+  stories,
+  epics,
+  initialView,
+  initialEpic,
+}: StoriesViewProps) {
+  // Identify active epic (in-progress epic, or first non-completed epic, or first epic)
+  const activeEpic = useMemo(() => {
+    return (
+      epics.find((e) => e.status === "in-progress") ??
+      epics.find((e) => e.status !== "done") ??
+      epics[0]
+    );
+  }, [epics]);
+
+  // Default view is "kanban" (Board)
+  const [view, setView] = useState<"table" | "kanban">(() => {
+    if (initialView) return initialView;
+    return "kanban";
+  });
+
+  // Default filter is active epic unless explicitly "all"
+  const [filters, setFilters] = useState<Filter<string>[]>(() => {
+    if (initialEpic === "all") return [];
+    const targetEpicId = initialEpic || activeEpic?.id;
+    if (targetEpicId) {
+      return [createFilter("epicId", "is", [targetEpicId])];
     }
-    return true;
-  }, [filters]);
-  const filtered = useMemo(() => stories.filter((story) => (!search || story.title.toLowerCase().includes(search.toLowerCase()) || story.id.toLowerCase().includes(search.toLowerCase())) && applyFilters(story)), [stories, search, applyFilters]);
+    return [];
+  });
+
+  const [search, setSearch] = useState("");
+  const isInitialMount = useRef(true);
+
+  // Sync with localStorage on client if no explicit server view in URL
+  useEffect(() => {
+    if (!initialView) {
+      try {
+        const savedView = localStorage.getItem("bmad_stories_view");
+        if (savedView === "table" || savedView === "kanban") {
+          setView(savedView);
+        }
+      } catch {}
+    }
+  }, [initialView]);
+
+  // Update browser URL query params without reloading
+  const updateUrl = useCallback((currentView: "table" | "kanban", currentFilters: Filter<string>[]) => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", currentView === "table" ? "backlog" : "board");
+
+    const epicFilter = currentFilters.find((f) => f.field === "epicId");
+    if (epicFilter && epicFilter.values.length > 0) {
+      url.searchParams.set("epic", epicFilter.values[0]);
+    } else {
+      url.searchParams.set("epic", "all");
+    }
+
+    window.history.replaceState(null, "", url.toString());
+  }, []);
+
+  // Synchronize URL on mount and whenever view or filters change
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      updateUrl(view, filters);
+      return;
+    }
+    updateUrl(view, filters);
+  }, [view, filters, updateUrl]);
+
+  const handleViewChange = useCallback((newView: "table" | "kanban") => {
+    setView(newView);
+    try {
+      localStorage.setItem("bmad_stories_view", newView);
+    } catch {}
+  }, []);
+
+  const applyFilters = useCallback(
+    (story: StoryDetail) => {
+      for (const filter of filters) {
+        if (filter.field === "status" && filter.values.length > 0) {
+          const match =
+            filter.operator === "is_not" || filter.operator === "is_not_any_of"
+              ? !filter.values.includes(story.status)
+              : filter.values.includes(story.status);
+          if (!match) return false;
+        }
+        if (filter.field === "epicId" && filter.values.length > 0) {
+          const match =
+            filter.operator === "is_not" || filter.operator === "is_not_any_of"
+              ? !filter.values.includes(story.epicId)
+              : filter.values.includes(story.epicId);
+          if (!match) return false;
+        }
+      }
+      return true;
+    },
+    [filters]
+  );
+
+  const filtered = useMemo(
+    () =>
+      stories.filter(
+        (story) =>
+          (!search ||
+            story.title.toLowerCase().includes(search.toLowerCase()) ||
+            story.id.toLowerCase().includes(search.toLowerCase())) &&
+          applyFilters(story)
+      ),
+    [stories, search, applyFilters]
+  );
 
   return (
-    <StaggeredList className="space-y-4" role="region" aria-label="Stories list" staggerDelay={0.1}>
+    <StaggeredList
+      className="space-y-4"
+      role="region"
+      aria-label="Stories list"
+      staggerDelay={0.1}
+    >
       <StaggeredItem className="flex flex-col gap-3 rounded-md border bg-card p-3 shadow-sm sm:flex-row sm:items-center">
-        <StoryFilters search={search} onSearchChange={setSearch} filters={filters} onFiltersChange={setFilters} epics={epics} />
-        <div className="flex rounded-md border bg-muted/40 p-1" role="group" aria-label="Display mode">
-          <Button variant={view === "table" ? "secondary" : "ghost"} size="sm" onClick={() => setView("table")} className="gap-1.5" aria-label="List view"><LayoutList className="h-4 w-4" /><span className="hidden sm:inline">Backlog</span></Button>
-          <Button variant={view === "kanban" ? "secondary" : "ghost"} size="sm" onClick={() => setView("kanban")} className="gap-1.5" aria-label="Board view"><Columns3 className="h-4 w-4" /><span className="hidden sm:inline">Board</span></Button>
+        <StoryFilters
+          search={search}
+          onSearchChange={setSearch}
+          filters={filters}
+          onFiltersChange={setFilters}
+          epics={epics}
+        />
+        <div
+          className="flex rounded-md border bg-muted/40 p-1"
+          role="group"
+          aria-label="Display mode"
+        >
+          <Button
+            variant={view === "table" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => handleViewChange("table")}
+            className="gap-1.5"
+            aria-label="List view"
+          >
+            <LayoutList className="h-4 w-4" />
+            <span className="hidden sm:inline">Backlog</span>
+          </Button>
+          <Button
+            variant={view === "kanban" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => handleViewChange("kanban")}
+            className="gap-1.5"
+            aria-label="Board view"
+          >
+            <Columns3 className="h-4 w-4" />
+            <span className="hidden sm:inline">Board</span>
+          </Button>
         </div>
       </StaggeredItem>
-      <StaggeredItem>{view === "table" ? <StoriesTable stories={filtered} /> : <KanbanBoard stories={filtered} />}</StaggeredItem>
+      <StaggeredItem>
+        {view === "table" ? (
+          <StoriesTable stories={filtered} />
+        ) : (
+          <KanbanBoard stories={filtered} />
+        )}
+      </StaggeredItem>
     </StaggeredList>
   );
 }

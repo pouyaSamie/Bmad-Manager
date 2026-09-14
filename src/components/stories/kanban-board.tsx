@@ -30,7 +30,44 @@ export function KanbanBoard({ stories }: KanbanBoardProps) {
             <div className="flex items-center gap-2 border-b border-border/70 pb-3"><span className={`h-2 w-2 rounded-full ${column.color}`} aria-hidden="true" /><h3 className="text-sm font-semibold">{column.label}</h3><Badge variant="secondary" className="ml-auto rounded-sm text-xs">{columnStories.length}</Badge></div>
             <div className="mt-3 space-y-2">
               {columnStories.map((story) => (
-                <Card key={story.id} className="rounded-md border bg-card py-0 shadow-sm transition-colors hover:border-info/60 hover:bg-info/5"><CardContent className="p-3"><div className="flex items-center gap-2"><WorkItemBadge type="story" /><span className="font-mono text-xs text-muted-foreground">{getStoryShortId(story.id)}</span></div><p className="mt-2 line-clamp-3 text-sm font-medium leading-5">{story.title}</p>{story.epicTitle && <p className="mt-2 truncate text-xs text-muted-foreground">{story.epicTitle}</p>}{story.totalTasks > 0 && <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2 text-xs text-muted-foreground"><span>Tasks</span><span className="font-medium">{story.completedTasks}/{story.totalTasks}</span></div>}</CardContent></Card>
+                <Card key={story.id} className="rounded-md border bg-card py-0 shadow-sm transition-colors hover:border-info/60 hover:bg-info/5">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <WorkItemBadge type="story" />
+                        <span className="font-mono text-xs text-muted-foreground">{getStoryShortId(story.id)}</span>
+                      </div>
+                      {story.status === "in-progress" && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-info">
+                          <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-info opacity-75" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-info" />
+                          </span>
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 line-clamp-3 text-sm font-medium leading-5">{story.title}</p>
+                    {story.epicTitle && <p className="mt-1.5 truncate text-xs text-muted-foreground">{story.epicTitle}</p>}
+                    {story.agent && (
+                      <div className="mt-2.5 flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/40 px-2 py-1 text-xs">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-background text-xs shadow-xs" title={`${story.agent.name}${story.agent.title ? ` (${story.agent.title})` : ""}`}>
+                          {story.agent.icon || "🤖"}
+                        </span>
+                        <span className="truncate font-medium text-foreground">{story.agent.name}</span>
+                        {story.agent.title && (
+                          <span className="truncate text-xs text-muted-foreground">· {story.agent.title}</span>
+                        )}
+                      </div>
+                    )}
+                    {story.totalTasks > 0 && (
+                      <div className="mt-2.5 flex items-center justify-between border-t border-border/60 pt-2 text-xs text-muted-foreground">
+                        <span>Tasks</span>
+                        <span className="font-medium">{story.completedTasks}/{story.totalTasks}</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               ))}
               {columnStories.length === 0 && <div className="flex h-20 items-center justify-center border border-dashed bg-background/50 text-xs text-muted-foreground">No stories</div>}
             </div>
