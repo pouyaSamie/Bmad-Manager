@@ -122,7 +122,7 @@ export async function getBmadProject(
     const filename = p.split("/").pop() || "";
     if (/^epic[-_]/i.test(filename)) return false;
     if (/^bmad[-_]/i.test(filename)) return false;
-    if (/^\d+-\d+-.+\.md$/.test(filename)) return true;
+    if (/^(?:spec[-_]|story[-_]|task[-_])?\d+[-_.]\d+.*\.md$/i.test(filename)) return true;
     if (/^[a-z][a-z0-9_-]*-\d+-.+\.md$/i.test(filename)) return true;
     if (/^story[_-]?\d/i.test(filename)) return true;
     return false;

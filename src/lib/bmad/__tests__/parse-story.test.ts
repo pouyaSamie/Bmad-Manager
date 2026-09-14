@@ -30,6 +30,18 @@ describe("parseStory", () => {
       expect(result!.epicId).toBe("di");
       expect(result!.title).toBe("Pipeline Setup");
     });
+
+    it("extracts ID from spec-N-N-title.md format", () => {
+      const result = parseStory(
+        "---\nstatus: complete\nstory_key: 5-1-advantage-capitalization\n---\n# Story 5.1: Backend Advantage Capitalization\n\nContent",
+        "spec-5-1-advantage-capitalization-resourcefulness-move-15-telemetry.md"
+      );
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe("5.1");
+      expect(result!.epicId).toBe("5");
+      expect(result!.status).toBe("done");
+      expect(result!.title).toBe("Backend Advantage Capitalization");
+    });
   });
 
   describe("frontmatter parsing", () => {

@@ -51,7 +51,7 @@ export function KanbanBoard({ stories, onSelectStory }: KanbanBoardProps) {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <WorkItemBadge type="story" />
-                        <span className="font-mono text-xs text-muted-foreground">{getStoryShortId(story.id)}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{story.id}</span>
                       </div>
                       {story.status === "in-progress" && (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-info">

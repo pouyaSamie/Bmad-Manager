@@ -12,16 +12,23 @@ export function parseStory(
 ): StoryDetail | null {
   try {
     // Try to extract ID from filename first
-    // Pattern: "N-N-title.md" (e.g., "1-1-project-initialization.md")
-    const numericMatch = filename.match(/^(\d+)-(\d+)-/);
-    // Alphanumeric prefix: "di-1-title.md" or "hk-2-title.md"
-    const alphaMatch = !numericMatch && !/^story[_-]/i.test(filename)
-      ? filename.match(/^([A-Za-z][A-Za-z0-9_-]*?)-(\d+)-/)
-      : null;
-    // Legacy pattern: "story-N.md" or "story_N.md"
-    const legacyMatch = !numericMatch && !alphaMatch
-      ? filename.match(/story[_-]?(\d+(?:[._-]\d+)?)/i)
-      : null;
+    // Pattern 1: Numeric story with 2 numbers: "(spec-|story-|task-)?N-N-title.md" or "(spec-|story-|task-)?N.N-title.md"
+    // e.g. "1-1-project-initialization.md", "spec-5-1-advantage.md", "story-1.2.md"
+    const numericMatch = filename.match(
+      /^(?:(?:spec|story|task)[_-])?(\d+)[._-](\d+)(?:[._-]|$)/i
+    );
+    // Pattern 2: Alphanumeric prefix: "di-1-title.md" or "spec-di-1-title.md"
+    const alphaMatch =
+      !numericMatch && !/^story[_-]?\d/i.test(filename)
+        ? filename.match(
+            /^(?:(?:spec|task)[_-])?([A-Za-z][A-Za-z0-9_-]*?)-(\d+)(?:[._-]|$)/i
+          )
+        : null;
+    // Pattern 3: Legacy pattern: "story-N.md" or "story_N.md"
+    const legacyMatch =
+      !numericMatch && !alphaMatch
+        ? filename.match(/story[_-]?(\d+(?:[._-]\d+)?)/i)
+        : null;
 
     let id: string;
     let epicId: string;
@@ -58,15 +65,39 @@ export function parseStory(
         : parsed.data.epic
           ? String(parsed.data.epic)
           : undefined;
-      if (parsed.data.id) id = normalizeStoryIdentifier(String(parsed.data.id));
+
+      const rawFmId = parsed.data.id || parsed.data.story_id;
+      if (rawFmId) {
+        id = normalizeStoryIdentifier(String(rawFmId));
+      } else if (parsed.data.story_key) {
+        const keyMatch = String(parsed.data.story_key).match(
+          /^(?:(?:spec|story|task)[_-])?(\d+)[._-](\d+)(?:[._-]|$)/i
+        );
+        if (keyMatch) {
+          id = `${keyMatch[1]}.${keyMatch[2]}`;
+          if (!epicId || epicId === "spec") epicId = keyMatch[1];
+        }
+      }
+
       if (frontmatterEpicId) epicId = normalizeAlphanumericId(frontmatterEpicId);
     } else {
       body = content;
     }
 
-    // Extract title from heading: "# Story 1.1: Title", "# Story DI.1: Title", or "# Title"
-    const titleMatch = body.match(/^#\s+(?:Story\s+[\w.-]+[:\s]+)?(.+)/m);
-    const title = frontmatterTitle || titleMatch?.[1]?.trim() || `Story ${id}`;
+    // Extract title and potential story ID from heading:
+    // "# Story 1.1: Title", "# Story DI.1: Title", "# Story 5: Title", or "# Title"
+    const headingMatch = body.match(/^#\s+(?:Story\s+((?:[A-Za-z0-9_-]+[._])?\d+)[:\s]+)?(.+)/m);
+    const headingStoryId = headingMatch?.[1]?.trim();
+    if (
+      headingStoryId &&
+      (!numericMatch || id === filename.replace(/\.md$/i, "") || id.startsWith("spec."))
+    ) {
+      id = headingStoryId.toLowerCase();
+      if (id.includes(".") && (!epicId || epicId === "spec")) {
+        epicId = id.split(".")[0];
+      }
+    }
+    const title = frontmatterTitle || headingMatch?.[2]?.trim() || `Story ${id}`;
 
     // Extract status from "Status: done" line (plain text, not frontmatter)
     const statusLineMatch = body.match(/^Status:\s*(.+)/im);

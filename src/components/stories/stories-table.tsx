@@ -13,7 +13,7 @@ import { getStoryShortId } from "@/lib/bmad/utils";
 
 const columns: ColumnDef<StoryDetail>[] = [
   { id: "type", header: "Work item type", cell: () => <WorkItemBadge type="story" />, size: 115, enableSorting: false },
-  { accessorKey: "id", header: "ID", cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{getStoryShortId(row.getValue("id"))}</span>, size: 60, enableSorting: false },
+  { accessorKey: "id", header: "ID", cell: ({ row }) => <span className="font-mono text-xs text-muted-foreground">{row.getValue("id")}</span>, size: 60, enableSorting: false },
   { accessorKey: "title", header: ({ column }) => <DataGridColumnHeader column={column} title="Title" />, cell: ({ row }) => <span className="block truncate font-medium text-foreground hover:text-primary transition-colors">{row.getValue("title")}</span> },
   { accessorKey: "status", header: ({ column }) => <DataGridColumnHeader column={column} title="State" />, cell: ({ row }) => <StatusBadge status={row.getValue("status")} compact />, size: 105 },
   { accessorKey: "agent", header: "Agent", cell: ({ row }) => { const agent = row.original.agent; if (!agent) return <span className="text-muted-foreground">—</span>; return <span className="inline-flex items-center gap-1.5 text-xs font-medium"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-xs">{agent.icon || "🤖"}</span><span className="truncate">{agent.name}</span></span>; }, size: 120, enableSorting: false },
