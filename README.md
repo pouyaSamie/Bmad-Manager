@@ -51,11 +51,12 @@ BMad Control is for local projects that need a deliberate operating surface. It 
 
 ## Key capabilities
 
-- Import BMad projects from GitHub or, in self-hosted environments, directly from local folders.
-- Track epics, stories, sprint status, velocity, and supporting planning documents.
-- Read both a single `epics.md` file and split epic files in an `epics/` directory.
-- Manage repository branches and access with email/password or optional GitHub OAuth.
-- Run multi-user installations with roles, Docker, PostgreSQL, and Traefik.
+- **Automatic BMAD Installation & Zero-Typing Wizard:** Import existing BMAD folders or provision new ones automatically with a graphical wizard matching the CLI (tool checkboxes, module selectors, language options, release channels).
+- **Full BMad Method Agent Workflow:** Visual drag-and-drop sequencing and configurable feedback loops (e.g. Nella $\rightarrow$ John, Murat $\rightarrow$ John) with support for all core agents (Mary, John, Sally, Winston, Amelia, Murat, Nella).
+- **Rich Documentation Library & Asset Viewer:** In-app markdown documentation with relative screenshot/image resolution, interactive image inspection (zoom, pan, dimensions, download), and recursive expand/collapse file tree controls.
+- **Track epics, stories, sprint status, and velocity:** Automatic correlation of numeric and alphanumeric epics from single or split files.
+- **Controlled Local Operations:** BMad Control operating surface with preview, approval queue, and isolated worker execution.
+- **Multi-user authentication & deployment:** Role-based access, GitHub OAuth or email/password, Docker, PostgreSQL, and Traefik.
 
 ## Stack
 
@@ -93,7 +94,9 @@ Open [http://localhost:3002](http://localhost:3002), sign in, then add a GitHub 
 
 ### 1. Add a BMad project
 
-Select **Add project** in the sidebar. Import a GitHub repository if your BMad artifacts are stored remotely, or choose a local folder in a self-hosted installation. For a local project, the folder must contain `_bmad/` or `_bmad-output/`.
+Select **Add project** in the sidebar. You can import a remote GitHub repository or choose a local folder in a self-hosted installation:
+- **Existing BMAD folder:** Automatically detected and imported with immediate agent and skill discovery.
+- **New or empty project folder:** BMAD Manager automatically prompts you to install BMAD with a zero-typing graphical wizard. Choose target tools/IDEs via checkboxes (Codex, Claude Code, Cursor, Copilot, Antigravity, etc.), select modules (`bmm`, `bmb`), choose languages from dropdowns, and select release channels without manual command-line typing. BMAD is installed non-interactively and configured immediately.
 
 ### 2. Start each review from the dashboard
 
@@ -105,13 +108,20 @@ Use the dashboard to see every imported project’s delivery state. The summary 
 - **Epics** shows the plan in sequence, from completed work to upcoming outcomes.
 - **Stories** provides a board or backlog view. Filter by epic when planning the next delivery slice.
 
-### 4. Read the source artifacts without leaving the workspace
+### 4. Read source artifacts and inspect assets in the Docs Library
 
-Open **Library** to browse the BMad planning and implementation files behind the dashboard. The library is read-only, so it is safe to use for review and discovery.
+Open **Docs Library** to browse project artifacts:
+- **Rich Markdown Rendering:** PRDs, architecture documents, and stories render formatted markdown with embedded screenshots and relative project image streaming (`/api/repo/.../raw`).
+- **Interactive Image Viewer:** Click any image in the file tree to open the full-resolution inspection viewer with zoom in/out, pan, transparency check pattern, and direct download.
+- **File Tree Controls:** Quickly navigate deep directory structures with **Expand all** and **Collapse all** toolbar buttons.
 
-### 5. Use BMad Control only for deliberate local-project changes
+### 5. Operate and customize workflows in BMad Control
 
-For a local project, open **BMad Control** to inspect the BMad agent workflow, skills, and feedback loops. Draft an operation to see its preview, approve it after review, and run `pnpm bmad:worker` separately to process approved work. The web app never executes queued operations directly.
+For local projects, open **BMad Control** to inspect and manage your project runtime:
+- **Agent Workflow Progression:** Inspect the complete core agent team: Mary (Analyst) $\rightarrow$ John (PM) $\rightarrow$ Sally (UX) $\rightarrow$ Winston (Architect) $\rightarrow$ Amelia (Dev) $\rightarrow$ Murat (QA Advisor) $\rightarrow$ Nella (Product Owner & Design Critic).
+- **Visual Reordering & Drag-and-Drop:** Visually adjust the execution sequence using intuitive grab handles and directional controls.
+- **Configurable Feedback Loops:** Define review channels (e.g. Nella's PO verdicts $\rightarrow$ John for story iteration, Murat's test findings $\rightarrow$ John for triage) persisted in `_bmad/custom/workflow.toml`.
+- **Safe Execution Surface:** Draft operations to preview CLI commands, approve them after review, and let the background worker (`pnpm bmad:worker`) process them safely.
 
 ### Run the BMad Control worker
 
