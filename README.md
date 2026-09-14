@@ -71,27 +71,6 @@ BMad Control is for local projects that need a deliberate operating surface. It 
 
 ## Get started
 
-### Try the seeded Docker demo
-
-Want to explore the workspace before importing your own project? The separate, disposable demo includes a populated local BMad project. It uses port `3003` for the app and `5434` for PostgreSQL, so it does not affect the regular development stack.
-
-```bash
-docker compose -f docker-compose.demo.yml up --build
-```
-
-Open [http://localhost:3003](http://localhost:3003) and sign in with:
-
-| Field | Value |
-| --- | --- |
-| Email | `demo@bmadmanager.local` |
-| Password | `demo-password-2026` |
-
-The seeded **Atlas Platform** project includes three epics, five stories across several delivery states, sprint progress, documentation, and BMad Control agents. To reset only the demo data, run:
-
-```bash
-docker compose -f docker-compose.demo.yml down -v
-```
-
 ### Use your own project locally
 
 **Requirements:** Node.js 20+, pnpm 10+, Docker, and Docker Compose.
@@ -188,12 +167,6 @@ The included production setup runs the application, PostgreSQL, and Traefik with
 - [Local Folder Import](./docs/LOCAL_FOLDER.md) — importing projects from the filesystem
 - [BMad Control](./docs/BMAD_CONTROL.md) — controlled local-project operations
 - [API Reference](./docs/API.md) — health and cache-revalidation endpoints
-- [Contributing](./CONTRIBUTING.md) — contribution guidelines
-- [Security](./SECURITY.md) — responsible disclosure policy
-
-## Contributing
-
-Issues and pull requests are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
