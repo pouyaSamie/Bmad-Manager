@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import {
   Plus,
   Search,
@@ -24,6 +26,12 @@ import {
   FolderOpen,
   Loader2,
   Github,
+  ChevronDown,
+  ChevronRight,
+  Sliders,
+  Sparkles,
+  TerminalSquare,
+  Bot,
 } from "lucide-react";
 import {
   listUserRepos,
@@ -34,6 +42,7 @@ import {
 } from "@/actions/repo-actions";
 import type { GitHubRepo } from "@/lib/github/types";
 import type { AvailableLocalProject } from "@/lib/path-utils";
+import type { BmadInstallOptions } from "@/lib/bmad-control";
 
 interface AddRepoDialogProps {
   trigger?: React.ReactNode;
@@ -190,29 +199,16 @@ export function AddRepoDialog({
     setImporting(null);
   }
 
-  async function handleImportLocal(e: React.FormEvent) {
-    e.preventDefault();
-    if (!localPath.trim()) return;
+  async function handleImportLocal(path: string, options?: BmadInstallOptions) {
+    if (!path.trim()) return;
 
     setLocalImporting(true);
     setLocalError("");
 
-    const result = await importLocalFolder({ localPath: localPath.trim() });
-
-    if (result.success) {
-      setOpen(false);
-      router.refresh();
-    } else {
-      setLocalError(result.error);
-    }
-    setLocalImporting(false);
-  }
-
-  async function handleQuickImport(projectPath: string) {
-    setLocalImporting(true);
-    setLocalError("");
-
-    const result = await importLocalFolder({ localPath: projectPath });
+    const result = await importLocalFolder({
+      localPath: path.trim(),
+      installOptions: options,
+    });
 
     if (result.success) {
       setOpen(false);
@@ -234,14 +230,14 @@ export function AddRepoDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0 pb-2 border-b border-border/40">
           <DialogTitle>Add a project</DialogTitle>
         </DialogHeader>
 
         {showTabs ? (
-          <Tabs defaultValue={defaultTab}>
-            <TabsList className="w-full">
+          <Tabs defaultValue={defaultTab} className="flex-1 flex flex-col min-h-0">
+            <TabsList className="w-full shrink-0">
               <TabsTrigger value="github" className="flex-1">
                 <Github className="mr-1.5 h-4 w-4" />
                 GitHub
@@ -251,7 +247,7 @@ export function AddRepoDialog({
                 Local Folder
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="github">
+            <TabsContent value="github" className="flex-1 min-h-0 mt-3">
               <GitHubRepoList
                 search={search}
                 setSearch={setSearch}
@@ -267,7 +263,7 @@ export function AddRepoDialog({
                 onSelect={handleSelectRepo}
               />
             </TabsContent>
-            <TabsContent value="local">
+            <TabsContent value="local" className="flex-1 min-h-0 mt-3 overflow-y-auto">
               <LocalFolderForm
                 localPath={localPath}
                 setLocalPath={setLocalPath}
@@ -275,22 +271,22 @@ export function AddRepoDialog({
                 localError={localError}
                 detectedProjects={detectedProjects}
                 scanningProjects={scanningProjects}
-                onQuickImport={handleQuickImport}
-                onSubmit={handleImportLocal}
+                onImport={handleImportLocal}
               />
             </TabsContent>
           </Tabs>
         ) : localFsEnabled ? (
-          <LocalFolderForm
-            localPath={localPath}
-            setLocalPath={setLocalPath}
-            localImporting={localImporting}
-            localError={localError}
-            detectedProjects={detectedProjects}
-            scanningProjects={scanningProjects}
-            onQuickImport={handleQuickImport}
-            onSubmit={handleImportLocal}
-          />
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <LocalFolderForm
+              localPath={localPath}
+              setLocalPath={setLocalPath}
+              localImporting={localImporting}
+              localError={localError}
+              detectedProjects={detectedProjects}
+              scanningProjects={scanningProjects}
+              onImport={handleImportLocal}
+            />
+          </div>
         ) : (
           <GitHubRepoList
             search={search}
@@ -456,6 +452,55 @@ function GitHubRepoList({
   );
 }
 
+const RECOMMENDED_TOOLS = [
+  { id: "codex", name: "Codex", target: ".agents/skills", desc: "Standard for BMad & OpenAI Codex" },
+  { id: "claude-code", name: "Claude Code", target: ".claude/skills", desc: "Anthropic Claude Code CLI" },
+  { id: "cursor", name: "Cursor", target: ".agents/skills", desc: "Cursor AI editor" },
+  { id: "github-copilot", name: "GitHub Copilot", target: ".agents/skills", desc: "VS Code Copilot extension" },
+  { id: "antigravity", name: "Google Antigravity", target: ".agent/skills", desc: "Antigravity IDE workspace" },
+  { id: "antigravity-cli", name: "Antigravity CLI (AGY)", target: ".agents/skills", desc: "Antigravity CLI runner" },
+];
+
+const ADDITIONAL_TOOLS = [
+  { id: "windsurf", name: "Windsurf", target: ".agents/skills", desc: "Codeium Windsurf IDE" },
+  { id: "cline", name: "Cline", target: ".cline/skills", desc: "Autonomous coding agent" },
+  { id: "gemini", name: "Gemini CLI", target: ".agents/skills", desc: "Google Gemini CLI" },
+  { id: "roo", name: "Roo Code", target: ".agents/skills", desc: "Roo Cline fork" },
+  { id: "openhands", name: "OpenHands", target: ".agents/skills", desc: "OpenHands software agent" },
+  { id: "trae", name: "Trae", target: ".trae/skills", desc: "ByteDance Trae IDE" },
+  { id: "qwen", name: "QwenCoder", target: ".qwen/skills", desc: "Alibaba Qwen Coder" },
+  { id: "kimi-code", name: "Kimi Code", target: ".agents/skills", desc: "Moonshot Kimi Code" },
+];
+
+const AVAILABLE_MODULES = [
+  {
+    id: "bmm",
+    name: "BMad Method (BMM)",
+    desc: "Agile AiDD module with standard roles (Mary, John, Sally, Winston, Amelia, Murat, Nella)",
+    recommended: true,
+  },
+  {
+    id: "bmb",
+    name: "BMad Builder (BMB)",
+    desc: "Module development toolkit for authoring custom BMAD modules and agent skills",
+    recommended: false,
+  },
+];
+
+const AVAILABLE_LANGUAGES = [
+  "English",
+  "Spanish",
+  "French",
+  "German",
+  "Japanese",
+  "Chinese",
+  "Portuguese",
+  "Italian",
+  "Korean",
+  "Russian",
+  "Arabic",
+];
+
 function LocalFolderForm({
   localPath,
   setLocalPath,
@@ -463,8 +508,7 @@ function LocalFolderForm({
   localError,
   detectedProjects = [],
   scanningProjects = false,
-  onQuickImport,
-  onSubmit,
+  onImport,
 }: {
   localPath: string;
   setLocalPath: (v: string) => void;
@@ -472,62 +516,135 @@ function LocalFolderForm({
   localError: string;
   detectedProjects?: AvailableLocalProject[];
   scanningProjects?: boolean;
-  onQuickImport: (path: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onImport: (path: string, options: BmadInstallOptions) => void;
 }) {
+  const [selectedTools, setSelectedTools] = useState<string[]>(["codex"]);
+  const [selectedModules, setSelectedModules] = useState<string[]>(["bmm"]);
+  const [userName, setUserName] = useState("Developer");
+  const [communicationLanguage, setCommunicationLanguage] = useState("English");
+  const [documentOutputLanguage, setDocumentOutputLanguage] = useState("English");
+  const [outputFolder, setOutputFolder] = useState("_bmad-output");
+  const [channel, setChannel] = useState<"stable" | "next">("stable");
+  const [shims, setShims] = useState(false);
+  const [showMoreTools, setShowMoreTools] = useState(false);
+  const [showWizard, setShowWizard] = useState(true);
+
+  const selectedDetected = detectedProjects.find((p) => p.path === localPath);
+  const isExistingBmad = selectedDetected ? selectedDetected.hasBmad : false;
+
+  function toggleTool(id: string) {
+    setSelectedTools((prev) => {
+      if (prev.includes(id)) {
+        const next = prev.filter((t) => t !== id);
+        return next.length > 0 ? next : ["codex"];
+      }
+      return [...prev, id];
+    });
+  }
+
+  function toggleModule(id: string) {
+    setSelectedModules((prev) => {
+      if (prev.includes(id)) {
+        const next = prev.filter((m) => m !== id);
+        return next.length > 0 ? next : ["bmm"];
+      }
+      return [...prev, id];
+    });
+  }
+
+  function getInstallOptions(): BmadInstallOptions {
+    return {
+      tools: selectedTools.length ? selectedTools : ["codex"],
+      modules: selectedModules.length ? selectedModules : ["bmm"],
+      userName: userName.trim() || "Developer",
+      communicationLanguage: communicationLanguage.trim() || "English",
+      documentOutputLanguage: documentOutputLanguage.trim() || "English",
+      outputFolder: outputFolder.trim() || "_bmad-output",
+      channel,
+      shims,
+    };
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!localPath.trim()) return;
+    onImport(localPath.trim(), getInstallOptions());
+  }
+
   return (
-    <form onSubmit={onSubmit} className="space-y-4 pt-2">
+    <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+      {/* Workspace Scan */}
       {scanningProjects ? (
         <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           <span>Scanning workspace for BMAD projects...</span>
         </div>
       ) : detectedProjects.length > 0 ? (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Detected in Workspace
           </p>
-          <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-lg border p-2">
-            {detectedProjects.map((proj) => (
-              <div
-                key={proj.path}
-                className="flex items-center justify-between gap-3 rounded-md p-2 hover:bg-muted/60 transition-colors"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <FolderOpen className="h-4 w-4 text-primary shrink-0" />
-                    <span className="text-sm font-medium truncate">{proj.name}</span>
-                    {proj.hasBmad && (
-                      <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
-                        BMAD
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate mt-0.5 font-mono">
-                    {proj.displayPath}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="h-7 px-3 text-xs shrink-0"
-                  disabled={localImporting}
-                  onClick={() => onQuickImport(proj.path)}
-                >
-                  {localImporting ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    "Import"
+          <div className="space-y-1.5 max-h-40 overflow-y-auto rounded-lg border p-1.5">
+            {detectedProjects.map((proj) => {
+              const isSelected = localPath === proj.path;
+              return (
+                <div
+                  key={proj.path}
+                  className={cn(
+                    "flex items-center justify-between gap-3 rounded-md p-2 transition-colors",
+                    isSelected ? "bg-primary/10 border border-primary/40" : "hover:bg-muted/60"
                   )}
-                </Button>
-              </div>
-            ))}
+                >
+                  <div
+                    className="min-w-0 flex-1 cursor-pointer"
+                    onClick={() => setLocalPath(proj.path)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="h-4 w-4 text-primary shrink-0" />
+                      <span className="text-sm font-medium truncate">{proj.name}</span>
+                      {proj.hasBmad ? (
+                        <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                          BMAD
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-primary/40 text-primary flex items-center gap-1">
+                          <Sparkles className="size-2.5" />
+                          Auto-installs BMAD
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5 font-mono">
+                      {proj.displayPath}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={proj.hasBmad ? "secondary" : "default"}
+                    className="h-7 px-3 text-xs shrink-0"
+                    disabled={localImporting}
+                    onClick={() => {
+                      setLocalPath(proj.path);
+                      onImport(proj.path, getInstallOptions());
+                    }}
+                  >
+                    {localImporting && localPath === proj.path ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : proj.hasBmad ? (
+                      "Import"
+                    ) : (
+                      "Install & Add"
+                    )}
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
 
-      <div className="space-y-2">
+      {/* Folder Path Input */}
+      <div className="space-y-1.5">
         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           {detectedProjects.length > 0 ? "Or Enter Path Manually" : "Folder Path"}
         </label>
@@ -537,27 +654,349 @@ function LocalFolderForm({
           onChange={(e) => setLocalPath(e.target.value)}
           disabled={localImporting}
           autoComplete="off"
+          className="h-9 text-xs"
         />
         <p className="text-xs text-muted-foreground">
-          Supports Windows paths (e.g. <code>C:\workspace\project</code>) or Linux/Docker paths. The folder must contain a <code>_bmad/</code> or <code>_bmad-output/</code> directory.
+          {isExistingBmad
+            ? "BMAD is detected in this folder. It will be imported immediately."
+            : "If BMAD is not present in this folder, it will be automatically installed according to the wizard options below."}
         </p>
       </div>
 
+      {/* BMAD Installation Wizard Options */}
+      <div className="rounded-xl border border-border/80 bg-card p-3.5 space-y-3.5 shadow-2xs">
+        <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-2">
+          <div className="flex items-center gap-2">
+            <Sliders className="size-4 text-primary" />
+            <div>
+              <h4 className="text-xs font-semibold text-foreground">BMAD Installation Wizard</h4>
+              <p className="text-[11px] text-muted-foreground">
+                {selectedModules.length} module(s) · {selectedTools.length} tool(s) · {communicationLanguage} · {channel}
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-muted-foreground"
+            onClick={() => setShowWizard(!showWizard)}
+          >
+            {showWizard ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+            <span>{showWizard ? "Collapse" : "Configure"}</span>
+          </Button>
+        </div>
+
+        {showWizard && (
+          <div className="space-y-4 text-xs">
+            {/* 1. Tools Selection (Checkboxes) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="font-semibold text-foreground flex items-center gap-1.5">
+                  <TerminalSquare className="size-3.5 text-primary" />
+                  Target Tools / IDEs (Checkboxes)
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTools(RECOMMENDED_TOOLS.map((t) => t.id))}
+                    className="text-[11px] text-primary hover:underline"
+                  >
+                    Select All Recommended
+                  </button>
+                  <span className="text-muted-foreground/40">·</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTools(["codex"])}
+                    className="text-[11px] text-muted-foreground hover:underline"
+                  >
+                    Codex Only
+                  </button>
+                </div>
+              </div>
+
+              {/* Recommended tools grid */}
+              <div className="grid gap-2 sm:grid-cols-2">
+                {RECOMMENDED_TOOLS.map((tool) => {
+                  const isChecked = selectedTools.includes(tool.id);
+                  return (
+                    <label
+                      key={tool.id}
+                      className={cn(
+                        "flex items-start gap-2.5 rounded-lg border p-2 text-xs cursor-pointer transition-colors select-none",
+                        isChecked
+                          ? "border-primary/60 bg-primary/5 text-foreground"
+                          : "border-border/60 hover:bg-muted/40 text-muted-foreground"
+                      )}
+                    >
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={isChecked}
+                        onCheckedChange={() => toggleTool(tool.id)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium truncate">{tool.name}</span>
+                          <span className="text-[9px] uppercase tracking-wider text-primary font-bold">
+                            Rec
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground font-mono truncate">
+                          {tool.target}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              {/* Additional tools toggle */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowMoreTools(!showMoreTools)}
+                  className="text-[11px] text-primary hover:underline flex items-center gap-1 mt-1"
+                >
+                  {showMoreTools ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+                  <span>{showMoreTools ? "Hide additional tools" : `Show ${ADDITIONAL_TOOLS.length} more IDEs/tools...`}</span>
+                </button>
+
+                {showMoreTools && (
+                  <div className="grid gap-2 sm:grid-cols-2 mt-2 pt-2 border-t border-border/40">
+                    {ADDITIONAL_TOOLS.map((tool) => {
+                      const isChecked = selectedTools.includes(tool.id);
+                      return (
+                        <label
+                          key={tool.id}
+                          className={cn(
+                            "flex items-start gap-2.5 rounded-lg border p-2 text-xs cursor-pointer transition-colors select-none",
+                            isChecked
+                              ? "border-primary/60 bg-primary/5 text-foreground"
+                              : "border-border/60 hover:bg-muted/40 text-muted-foreground"
+                          )}
+                        >
+                          <Checkbox
+                            className="mt-0.5"
+                            checked={isChecked}
+                            onCheckedChange={() => toggleTool(tool.id)}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <span className="font-medium truncate">{tool.name}</span>
+                            <p className="text-[10px] text-muted-foreground font-mono truncate">
+                              {tool.target}
+                            </p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 2. Modules Selection (Checkboxes) */}
+            <div className="space-y-2">
+              <label className="font-semibold text-foreground flex items-center gap-1.5">
+                <Bot className="size-3.5 text-primary" />
+                Modules (Checkboxes)
+              </label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {AVAILABLE_MODULES.map((mod) => {
+                  const isChecked = selectedModules.includes(mod.id);
+                  return (
+                    <label
+                      key={mod.id}
+                      className={cn(
+                        "flex items-start gap-2.5 rounded-lg border p-2.5 text-xs cursor-pointer transition-colors select-none",
+                        isChecked
+                          ? "border-primary/60 bg-primary/5 text-foreground"
+                          : "border-border/60 hover:bg-muted/40 text-muted-foreground"
+                      )}
+                    >
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={isChecked}
+                        onCheckedChange={() => toggleModule(mod.id)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold">{mod.name}</span>
+                          {mod.recommended && (
+                            <span className="text-[9px] uppercase tracking-wider text-primary font-bold">
+                              Core
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-normal mt-0.5">
+                          {mod.desc}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3. Personalization & Output (Pre-filled Defaults & Selectors) */}
+            <div className="grid gap-3 sm:grid-cols-2 pt-1 border-t border-border/40">
+              <div>
+                <label className="font-medium text-foreground block mb-1">
+                  User Name (for agents)
+                </label>
+                <Input
+                  className="h-8 text-xs"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="Developer"
+                />
+              </div>
+
+              <div>
+                <label className="font-medium text-foreground block mb-1">
+                  Output Folder
+                </label>
+                <Input
+                  className="h-8 text-xs font-mono"
+                  value={outputFolder}
+                  onChange={(e) => setOutputFolder(e.target.value)}
+                  placeholder="_bmad-output"
+                />
+              </div>
+
+              <div>
+                <label className="font-medium text-foreground block mb-1">
+                  Communication Language
+                </label>
+                <select
+                  className="h-8 w-full rounded-md border border-input bg-background px-2.5 text-xs"
+                  value={communicationLanguage}
+                  onChange={(e) => setCommunicationLanguage(e.target.value)}
+                >
+                  {AVAILABLE_LANGUAGES.map((lang) => (
+                    <option key={lang} value={lang}>
+                      {lang}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="font-medium text-foreground block mb-1">
+                  Document Output Language
+                </label>
+                <select
+                  className="h-8 w-full rounded-md border border-input bg-background px-2.5 text-xs"
+                  value={documentOutputLanguage}
+                  onChange={(e) => setDocumentOutputLanguage(e.target.value)}
+                >
+                  {AVAILABLE_LANGUAGES.map((lang) => (
+                    <option key={lang} value={lang}>
+                      {lang}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* 4. Release Channel & Shims (Segmented Selectors) */}
+            <div className="grid gap-3 sm:grid-cols-2 pt-1 border-t border-border/40">
+              <div>
+                <label className="font-medium text-foreground block mb-1">
+                  Release Channel
+                </label>
+                <div className="grid grid-cols-2 gap-1 rounded-lg border border-input p-0.5 bg-muted/20">
+                  <button
+                    type="button"
+                    onClick={() => setChannel("stable")}
+                    className={cn(
+                      "rounded-md py-1 px-2 text-center text-[11px] transition-all",
+                      channel === "stable"
+                        ? "bg-background font-semibold text-foreground shadow-2xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Stable (Official)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChannel("next")}
+                    className={cn(
+                      "rounded-md py-1 px-2 text-center text-[11px] transition-all",
+                      channel === "next"
+                        ? "bg-background font-semibold text-foreground shadow-2xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Next (HEAD)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-medium text-foreground block mb-1">
+                  Install Deprecated Shims
+                </label>
+                <div className="grid grid-cols-2 gap-1 rounded-lg border border-input p-0.5 bg-muted/20">
+                  <button
+                    type="button"
+                    onClick={() => setShims(false)}
+                    className={cn(
+                      "rounded-md py-1 px-2 text-center text-[11px] transition-all",
+                      !shims
+                        ? "bg-background font-semibold text-foreground shadow-2xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    No (Recommended)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShims(true)}
+                    className={cn(
+                      "rounded-md py-1 px-2 text-center text-[11px] transition-all",
+                      shims
+                        ? "bg-background font-semibold text-foreground shadow-2xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Yes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Error Message */}
       {localError && (
-        <p className="text-destructive text-sm">{localError}</p>
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-2.5 text-xs text-destructive">
+          {localError}
+        </div>
       )}
 
+      {/* Action Button */}
       <Button
         type="submit"
-        className="w-full"
+        className="w-full h-9"
         disabled={localImporting || !localPath.trim()}
       >
         {localImporting ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Installing BMAD & configuring project...
+          </>
+        ) : isExistingBmad ? (
+          <>
+            <FolderOpen className="mr-2 h-4 w-4" />
+            Import local BMAD folder
+          </>
         ) : (
-          <FolderOpen className="mr-2 h-4 w-4" />
+          <>
+            <Sparkles className="mr-2 h-4 w-4" />
+            Install BMAD & Add Project
+          </>
         )}
-        Import local folder
       </Button>
     </form>
   );
