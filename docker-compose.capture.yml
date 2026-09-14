@@ -1,9 +1,0 @@
-services:
-  demo-seed:
-    build:
-      dockerfile: Dockerfile.demo-capture
-    command: >
-      sh -c "prisma migrate deploy && node /usr/local/lib/node_modules/pnpm/bin/pnpm.cjs exec tsx scripts/demo-seed.ts"
-  web:
-    build:
-      dockerfile: Dockerfile.demo-capture

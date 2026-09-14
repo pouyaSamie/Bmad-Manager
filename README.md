@@ -110,6 +110,30 @@ pnpm dev
 
 Open [http://localhost:3002](http://localhost:3002), sign in, then add a GitHub repository or local BMad folder. For environment variables and detailed setup, read [Getting Started](./docs/GETTING_STARTED.md).
 
+## How to use Bmad Manager
+
+### 1. Add a BMad project
+
+Select **Add project** in the sidebar. Import a GitHub repository if your BMad artifacts are stored remotely, or choose a local folder in a self-hosted installation. For a local project, the folder must contain `_bmad/` or `_bmad-output/`.
+
+### 2. Start each review from the dashboard
+
+Use the dashboard to see every imported project’s delivery state. The summary cards show project count, epics, stories, completed work, and work in progress; select a project card to investigate it.
+
+### 3. Review delivery at the right level
+
+- **Overview** is the project health page: sprint progress, velocity, blockers, key files, and epic status.
+- **Epics** shows the plan in sequence, from completed work to upcoming outcomes.
+- **Stories** provides a board or backlog view. Filter by epic when planning the next delivery slice.
+
+### 4. Read the source artifacts without leaving the workspace
+
+Open **Library** to browse the BMad planning and implementation files behind the dashboard. The library is read-only, so it is safe to use for review and discovery.
+
+### 5. Use BMad Control only for deliberate local-project changes
+
+For a local project, open **BMad Control** to inspect the BMad agent workflow, skills, and feedback loops. Draft an operation to see its preview, approve it after review, and run `pnpm bmad:worker` separately to process approved work. The web app never executes queued operations directly.
+
 ### Run the BMad Control worker
 
 BMad Control is available for imported local projects. It uses encrypted gateway credentials and a dedicated worker, so the web application does not execute queued operations itself.

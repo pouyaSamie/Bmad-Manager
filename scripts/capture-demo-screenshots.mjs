@@ -97,11 +97,12 @@ async function main() {
     const cdp = await openPage();
     await cdp.send("Page.enable");
     await cdp.send("Emulation.setDeviceMetricsOverride", {
-      width: 1440,
-      height: 1000,
+      width: 1920,
+      height: 1200,
       deviceScaleFactor: 1,
       mobile: false,
     });
+    await navigate(cdp, "/login");
 
     const signIn = await cdp.send("Runtime.evaluate", {
       awaitPromise: true,
@@ -120,7 +121,7 @@ async function main() {
       ["/", "screen1.png"],
       ["/repo/local/atlas-platform", "screen2.png"],
       ["/repo/local/atlas-platform/epics", "screen3.png"],
-      ["/repo/local/atlas-platform/stories", "screen4.png"],
+      ["/repo/local/atlas-platform/stories?view=board&epic=all", "screen4.png"],
       ["/repo/local/atlas-platform/docs", "screen5.png"],
       ["/repo/local/atlas-platform/control", "screen6.png"],
     ];

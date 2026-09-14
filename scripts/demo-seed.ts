@@ -87,7 +87,7 @@ async function main() {
     ["bmad-agent-analyst", "analysis", "Mary", "Business Analyst", "🔎", "Frames the problem, research, and discovery findings."],
     ["bmad-agent-pm", "planning", "John", "Product Manager", "🧭", "Turns discovery into a prioritized, reviewable delivery plan."],
     ["bmad-agent-ux-designer", "ux-design", "Sally", "UX Designer", "🎨", "Shapes the experience and validates the user journey."],
-    ["bmad-agent-architect", "architecture", "architecture", "Solution Architect", "🏗️", "Defines the technical approach and delivery guardrails."],
+    ["bmad-agent-architect", "architecture", "Winston", "Solution Architect", "🏗️", "Defines the technical approach and delivery guardrails."],
     ["bmad-agent-dev", "implementation", "Amelia", "Developer", "⚡", "Implements approved stories and prepares work for review."],
     ["bmad-tea", "quality", "Murat", "Test Engineer", "🧪", "Tests delivery outcomes and reports actionable findings."],
     ["bmad-agent-po", "product-ownership", "Nella", "Product Owner & Critic", "👑", "Reviews outcomes against acceptance criteria and delivery intent."],
