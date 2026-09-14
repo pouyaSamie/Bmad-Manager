@@ -1,38 +1,67 @@
 # Local Folder Import
 
-When self-hosting Bmad Manager on the same machine where your BMAD projects live, you can import them directly from the filesystem — no GitHub needed.
+Local Folder Import lets a self-hosted Bmad Manager read BMad artifacts directly from a project on the same machine. It is the required project type for [BMad Control](./BMAD_CONTROL.md).
 
-## Enabling
+## Enable it
 
-Set the following in your `.env`:
+Set this in `.env`, then restart the application:
 
-```
+```dotenv
 ENABLE_LOCAL_FS=true
 ```
 
-Restart the dev server after changing this value.
+Select **Add a project** on the dashboard, open **Local Folder**, and choose a project folder. The project must contain `_bmad/` or `_bmad-output/`. After import, use **Refresh** when its files change.
 
-## How it works
+## Running the app directly on your machine
 
-1. Click **"Add a project"** in the dashboard
-2. A **"Local Folder"** tab appears alongside the GitHub tab
-3. Enter the **absolute path** to your project folder (e.g. `/home/user/my-project`)
-4. The system validates that the folder contains a `_bmad/` or `_bmad-output/` directory
-5. The project is imported and appears in your dashboard just like a GitHub repo
+Enter an absolute path the server can read:
 
-Once imported, you can browse epics, stories, and docs exactly as you would with a GitHub project. Use the **Refresh** action to re-scan the folder when files change.
+| System | Example |
+|---|---|
+| Windows | `C:\workspace\my-project` |
+| macOS / Linux | `/Users/you/workspace/my-project` or `/home/you/workspace/my-project` |
 
-## Security
+The server reads the folder as it exists at that path. Moving or renaming it means importing the folder again.
 
-The local provider includes multiple safety guards:
-- **Path traversal protection** — rejects `..`, null bytes, and special characters
-- **No symlink access** — symbolic links are skipped at every level
-- **File size limit** — 10 MB per file (prevents memory exhaustion)
-- **File count limit** — 10,000 files max per project
-- **Depth limit** — 20 directory levels max
+## Running the app in Docker
 
-## Limitations
+The container cannot see host folders unless they are mounted. The included Compose file maps `C:/workspace` on Windows to `/workspace` in the container and sets the matching defaults:
 
-- Only works when the Next.js server runs on the **same machine** as the project files
-- No branch/version support — local folders are a live snapshot
-- If you move or rename the folder, you need to re-import it
+```dotenv
+LOCAL_WORKSPACE_PATH=/workspace
+LOCAL_HOST_WORKSPACE=C:/workspace
+```
+
+Place local projects beneath `C:\workspace`, then select one from the local-folder picker. Bmad Manager maps the displayed Windows path to its mounted container path.
+
+For another host directory, update all three values consistently in your Compose configuration:
+
+```yaml
+services:
+  web:
+    environment:
+      LOCAL_WORKSPACE_PATH: /workspace
+      LOCAL_HOST_WORKSPACE: C:/your/projects
+    volumes:
+      - C:/your/projects:/workspace:ro
+```
+
+Use a read-only mount (`:ro`) when you only need dashboards and document browsing. BMad Control needs a writable mount because approved operations can write project customizations, agents, and skills.
+
+## What Bmad Manager reads
+
+The local content provider limits artifact discovery and reading to `_bmad/`, `_bmad-output/`, and any valid custom BMad output directory declared by the project. This keeps unrelated project source code out of the dashboard browser.
+
+## Safety limits
+
+- Paths are jailed inside the imported project; traversal and null bytes are rejected.
+- Symbolic links are skipped.
+- Only BMad directories can be read by the content provider.
+- Files larger than 10 MB are not read.
+- Scans stop after 10,000 files or 20 nested directory levels.
+
+## Limits to keep in mind
+
+- The application must run on the same host as the folder, or have that folder mounted into its container.
+- Local folders are live files, not Git branches or versioned snapshots.
+- BMad Control is available only to the account that imported the local project.
