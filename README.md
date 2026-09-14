@@ -28,6 +28,10 @@ Bmad Manager turns the planning artifacts already in a BMad project into a pract
 | --- | --- |
 | ![Story board](./docs/screen4.png) | ![Documentation browser](./docs/screen5.png) |
 
+| BMad Control |
+| --- |
+| ![BMad Control](./docs/screen6.png) |
+
 ## Stack
 
 | Area | Technology |
@@ -66,9 +70,32 @@ Open [http://localhost:3002](http://localhost:3002), sign in, and add a GitHub r
 
 For a full description of the environment variables, see [Getting Started](./docs/GETTING_STARTED.md).
 
+### Run the seeded Docker demo
+
+The repository includes a separate, disposable Docker demo with a populated local BMad project. It uses port `3003` for the app and `5434` for PostgreSQL, so it does not affect the regular development stack.
+
+```bash
+docker compose -f docker-compose.demo.yml up --build
+```
+
+Open [http://localhost:3003](http://localhost:3003) and sign in with:
+
+| Field | Value |
+| --- | --- |
+| Email | `demo@bmadmanager.local` |
+| Password | `demo-password-2026` |
+
+The seeded **Atlas Platform** project includes three epics, five stories across several delivery states, sprint progress, documentation, and BMad Control agents. To reset only the demo data, run:
+
+```bash
+docker compose -f docker-compose.demo.yml down -v
+```
+
 ### BMad Control worker
 
 BMad Control is available for imported local projects. It uses encrypted gateway credentials and a dedicated worker, so the web application does not execute queued operations itself.
+
+The control workspace brings a project’s installed agents, skills, workflow stages, model routes, conversations, and reviewable operations into one place. It is designed to keep project changes deliberate: operations are previewed, approved, queued, and then processed by the dedicated worker rather than executed directly by the web app.
 
 Add a stable 32-byte base64url `AGENT_ENCRYPTION_KEY` to `.env`, then run the application and worker in separate terminals:
 
