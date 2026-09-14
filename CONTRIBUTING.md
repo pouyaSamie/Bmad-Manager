@@ -1,4 +1,4 @@
-# Contributing to MyBMAD Dashboard
+# Contributing to Bmad Manager
 
 Thank you for your interest in contributing! This document explains how to get started.
 
@@ -24,7 +24,7 @@ This project follows a [Code of Conduct](./CODE_OF_CONDUCT.md). By participating
 
 ## How to Report a Bug
 
-1. Check the [existing issues](https://github.com/DevHDI/my-bmad/issues) to avoid duplicates
+1. Check the [existing issues](https://github.com/pouyaSamie/Bmad-Manager/issues) to avoid duplicates
 2. Open a new issue using the **Bug Report** template
 3. Include: steps to reproduce, expected behavior, actual behavior, environment details
 
@@ -50,8 +50,8 @@ This project follows a [Code of Conduct](./CODE_OF_CONDUCT.md). By participating
 
 ```bash
 # 1. Fork and clone
-git clone https://github.com/YOUR_USERNAME/my-bmad.git
-cd my-bmad
+git clone https://github.com/YOUR_USERNAME/Bmad-Manager.git
+cd Bmad-Manager
 
 # 2. Install dependencies
 pnpm install

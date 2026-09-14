@@ -19,7 +19,7 @@ If you discover a security vulnerability, please report it responsibly:
 
 ### Option 1 — GitHub Security Advisories (Preferred)
 
-Use [GitHub's private vulnerability reporting](https://github.com/DevHDI/my-bmad/security/advisories/new) to report the issue confidentially.
+Use [GitHub's private vulnerability reporting](https://github.com/pouyaSamie/Bmad-Manager/security/advisories/new) to report the issue confidentially.
 
 ### Option 2 — Direct Contact
 
@@ -70,7 +70,7 @@ Please provide as much of the following as possible:
 
 ## Security Best Practices for Deployment
 
-When self-hosting MyBMAD Dashboard:
+When self-hosting Bmad Manager:
 
 - **Never commit** `.env` or `.env.local` files to version control
 - Use strong, randomly generated secrets for `BETTER_AUTH_SECRET` and `REVALIDATE_SECRET`

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to MyBMAD Dashboard are documented here.
+All notable changes to Bmad Manager are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -34,5 +34,5 @@ Initial public release.
 
 ---
 
-[Unreleased]: https://github.com/DevHDI/my-bmad/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/DevHDI/my-bmad/releases/tag/v0.1.0
+[Unreleased]: https://github.com/pouyaSamie/Bmad-Manager/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/pouyaSamie/Bmad-Manager/releases/tag/v0.1.0

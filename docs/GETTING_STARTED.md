@@ -1,6 +1,6 @@
 # Getting Started
 
-Step-by-step guide to run MyBMAD Dashboard locally.
+Step-by-step guide to run Bmad Manager locally.
 
 ## Prerequisites
 
@@ -13,8 +13,8 @@ Step-by-step guide to run MyBMAD Dashboard locally.
 ## 1. Clone the repository
 
 ```bash
-git clone https://github.com/DevHDI/my-bmad.git
-cd my-bmad
+git clone https://github.com/pouyaSamie/Bmad-Manager.git
+cd Bmad-Manager
 ```
 
 ## 2. Install dependencies
@@ -67,7 +67,7 @@ The base URL where your app runs. For local development:
 BETTER_AUTH_URL=http://localhost:3002
 ```
 
-In production, set this to your real domain (e.g. `https://mybmad.example.com`).
+In production, set this to your real domain (e.g. `https://bmad-manager.example.com`).
 
 ### Revalidation secret (`REVALIDATE_SECRET`)
 
@@ -84,7 +84,7 @@ Required for "Login with GitHub". Follow these steps:
 1. Go to [github.com/settings/developers](https://github.com/settings/developers)
 2. Click **New OAuth App**
 3. Fill in the form:
-   - **Application name:** `MyBMAD` (or anything you like)
+   - **Application name:** `Bmad Manager` (or anything you like)
    - **Homepage URL:** `http://localhost:3002`
    - **Authorization callback URL:** `http://localhost:3002/api/auth/callback/github`
 4. Click **Register application**

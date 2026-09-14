@@ -14,7 +14,7 @@ Triggers cache revalidation for a specific tag. Requires authentication via the 
 
 **Example:**
 ```bash
-curl -X POST https://mybmad.example.com/api/revalidate \
+curl -X POST https://bmad-manager.example.com/api/revalidate \
   -H "Content-Type: application/json" \
   -H "x-revalidate-secret: your_secret_here" \
   -d '{"tag": "repo-owner-name"}'

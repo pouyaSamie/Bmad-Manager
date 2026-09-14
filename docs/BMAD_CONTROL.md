@@ -1,10 +1,10 @@
 # BMad Control
 
-MyBMAD can manage BMad for imported **local** projects. Open a project and select **BMad Control** to scan its installed agents and skills.
+Bmad Manager can manage BMad for imported **local** projects. Open a project and select **BMad Control** to scan its installed agents and skills.
 
 ## Required runtime setup
 
-Add a stable 32-byte base64url value to `AGENT_ENCRYPTION_KEY`. MyBMAD uses it to encrypt each project gateway API key in PostgreSQL. Do not rotate it without first re-encrypting stored keys.
+Add a stable 32-byte base64url value to `AGENT_ENCRYPTION_KEY`. Bmad Manager uses it to encrypt each project gateway API key in PostgreSQL. Do not rotate it without first re-encrypting stored keys.
 
 Run the web app and approved-operation worker separately during development:
 
