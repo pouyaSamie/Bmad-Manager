@@ -1,82 +1,39 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { deleteRepo } from "@/actions/repo-actions";
+import { DeleteProjectDialog } from "@/components/shared/delete-project-dialog";
 
 interface DeleteRepoButtonProps {
   owner: string;
   name: string;
   displayName: string;
+  sourceType?: string;
 }
 
-export function DeleteRepoButton({ owner, name, displayName }: DeleteRepoButtonProps) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleDelete() {
-    setDeleting(true);
-    setError(null);
-    try {
-      const result = await deleteRepo({ owner, name });
-      if (result.success) {
-        setOpen(false);
-        router.push("/");
-        router.refresh();
-        return;
-      }
-      setError(result.error);
-    } catch {
-      setError("An unexpected error occurred.");
-    } finally {
-      setDeleting(false);
-    }
-  }
-
+export function DeleteRepoButton({
+  owner,
+  name,
+  displayName,
+  sourceType = "local",
+}: DeleteRepoButtonProps) {
   return (
-    <Dialog open={open} onOpenChange={(value) => { if (deleting) return; setOpen(value); if (!value) setError(null); }}>
-      <DialogTrigger asChild>
+    <DeleteProjectDialog
+      owner={owner}
+      name={name}
+      displayName={displayName}
+      sourceType={sourceType}
+      trigger={
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9 text-muted-foreground hover:text-destructive"
+          className="h-9 w-9 text-muted-foreground hover:text-destructive transition-colors"
           aria-label="Remove project"
+          title="Remove project"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Remove project</DialogTitle>
-          <DialogDescription>
-            Do you want to remove <strong>{displayName}</strong> from the dashboard? The GitHub repository will not be deleted.
-          </DialogDescription>
-        </DialogHeader>
-        {error && (
-          <p role="alert" className="text-sm text-destructive px-1">{error}</p>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={deleting}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-            {deleting ? "Removing..." : "Remove"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      }
+    />
   );
 }

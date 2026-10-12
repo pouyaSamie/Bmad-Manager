@@ -9,7 +9,7 @@ import { useBreadcrumb } from "@/contexts/breadcrumb-context";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 
-const routeLabels: Record<string, string> = { profile: "Profile", overview: "Overview", epics: "Epics", stories: "Stories", docs: "Library", control: "BMad Control" };
+const routeLabels: Record<string, string> = { profile: "Profile", overview: "Overview", epics: "Epics", stories: "Stories", docs: "Library", control: "BMad Control", models: "Models & Providers" };
 
 function getRouteLabel(segment: string) { return routeLabels[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1); }
 

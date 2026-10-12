@@ -192,6 +192,7 @@ export function AddRepoDialog({
 
     if (result.success) {
       setOpen(false);
+      router.push(`/repo/${result.data.owner}/${result.data.name}`);
       router.refresh();
     } else {
       setImportError(result.error);
@@ -212,6 +213,7 @@ export function AddRepoDialog({
 
     if (result.success) {
       setOpen(false);
+      router.push(`/repo/${result.data.owner}/${result.data.name}`);
       router.refresh();
     } else {
       setLocalError(result.error);

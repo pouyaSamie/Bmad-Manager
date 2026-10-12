@@ -54,7 +54,14 @@ export const getAuthenticatedRepos = cache(
       select: { owner: true, name: true, branch: true, displayName: true, description: true, sourceType: true, localPath: true, lastSyncedAt: true },
       orderBy: { createdAt: "desc" },
     });
-    return rows as RepoConfig[];
+    const seen = new Set<string>();
+    const deduplicated = rows.filter((r) => {
+      const key = `${r.owner}/${r.name}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return deduplicated as RepoConfig[];
   }
 );
 

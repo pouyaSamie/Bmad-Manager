@@ -29,6 +29,7 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
+import path from "node:path";
 import {
   runBmadInstaller,
   syncProjectBmadRuntime,
@@ -305,15 +306,18 @@ export async function importRepo(input: {
 const deleteRepoSchema = z.object({
   owner: z.string().min(1).max(255).trim(),
   name: z.string().min(1).max(255).trim(),
+  uninstallBmad: z.boolean().optional(),
 });
 
 /**
- * Delete an imported repo from the user's dashboard (GitHub or local).
+ * Delete an imported repo from the user's dashboard (GitHub or local),
+ * with optional BMAD uninstallation for local projects.
  */
 export async function deleteRepo(input: {
   owner: string;
   name: string;
-}): Promise<ActionResult<{ deleted: boolean }>> {
+  uninstallBmad?: boolean;
+}): Promise<ActionResult<{ deleted: boolean; uninstalledBmad?: boolean }>> {
   const parsed = deleteRepoSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: "Invalid data", code: "VALIDATION_ERROR" };
@@ -325,17 +329,42 @@ export async function deleteRepo(input: {
   const { userId } = authResult.data;
 
   try {
-    // F5: Always scope by userId
-    const deleted = await prisma.repo.deleteMany({
+    // F5: Scope by userId
+    const repo = await prisma.repo.findFirst({
       where: { userId, owner: parsed.data.owner, name: parsed.data.name },
+      select: { id: true, sourceType: true, localPath: true },
     });
 
-    if (deleted.count === 0) {
+    if (!repo) {
       return { success: false, error: "Repo not found", code: "NOT_FOUND" };
     }
 
+    let uninstalledBmad = false;
+
+    // If local repo and uninstallBmad requested, clean up BMAD folders from disk
+    if (parsed.data.uninstallBmad && repo.sourceType === "local" && repo.localPath) {
+      try {
+        const projectRoot = resolveLocalPath(repo.localPath);
+        const bmadDir = path.join(projectRoot, "_bmad");
+        const bmadOutputDir = path.join(projectRoot, "_bmad-output");
+        const agentsSkillsDir = path.join(projectRoot, ".agents", "skills");
+
+        await fs.rm(bmadDir, { recursive: true, force: true }).catch(() => {});
+        await fs.rm(bmadOutputDir, { recursive: true, force: true }).catch(() => {});
+        await fs.rm(agentsSkillsDir, { recursive: true, force: true }).catch(() => {});
+        uninstalledBmad = true;
+      } catch (fsErr) {
+        console.error("Failed to remove BMAD files during uninstall:", fsErr);
+      }
+    }
+
+    await prisma.repo.delete({
+      where: { id: repo.id },
+    });
+
     revalidatePath("/(dashboard)");
-    return { success: true, data: { deleted: true } };
+    revalidatePath("/");
+    return { success: true, data: { deleted: true, uninstalledBmad } };
   } catch (error: unknown) {
     return { success: false, error: sanitizeError(error, "DB_ERROR"), code: "DB_ERROR" };
   }
@@ -925,6 +954,25 @@ export async function importLocalFolder(input: {
 
     // F11: displayName fallback to raw basename
     const displayName = parsed.data.displayName ?? rawBasename;
+
+    // Guard against duplicate project imports for the same physical folder
+    const existingRepo = await prisma.repo.findFirst({
+      where: {
+        userId,
+        owner: "local",
+        OR: [
+          { name: repoName },
+          { localPath: resolvedPath },
+          { localPath: parsed.data.localPath },
+          { displayName: { equals: displayName, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, owner: true, name: true, displayName: true },
+    });
+
+    if (existingRepo) {
+      return { success: true, data: existingRepo };
+    }
 
     const { outputDir, paths: scannedPaths } = await resolveBmadOutputDir(
       provider,
