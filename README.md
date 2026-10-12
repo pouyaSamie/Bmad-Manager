@@ -44,20 +44,35 @@ The library provides a safe in-app browser for BMad planning and implementation 
 
 ![Project documentation library](./docs/screen5.png)
 
-### Use BMad Control for reviewed local operations
+### Use BMad Control for visual agent orchestration
 
-BMad Control is for local projects that need a deliberate operating surface. It brings agents, skills, workflow stages, model routes, conversations, and the approval queue together; the web app previews and queues approved operations while a separate worker performs them.
+BMad Control provides an interactive operating surface for local projects. It features an interactive **Agent Workflow Canvas** with squircle node cards, pan/zoom graph navigation, and collision-free overhead feedback loops (QA Defect Loop & PO Critic Verdict Loop).
 
-![BMad Control workspace](./docs/screen6.png)
+![BMad Control Agent Workflow Canvas](./docs/screen6.png)
+
+### Configure agents, personas, and model routes with one click
+
+Double-click any node or click **⚙️ Config** to open the in-canvas node configuration modal. Switch between 1-click model presets, customize system personas with pre-populated BMad baselines, and leverage the **End-User Advocate Critic** perspective for Nella to test real customer journeys.
+
+![Agent Node Configuration Modal](./docs/screen7.png)
+
+### Route models across Google Antigravity, local LLMs, and cloud providers
+
+Manage project-wide inference on the dedicated **Models & AI Providers** page. Connect to your active Google Antigravity subscription (defaulting to `gemini-3.8-flash-high` with zero API key required), run local models with Ollama or LM Studio, or connect cloud gateways like OpenRouter and OpenAI with an interactive **Agent Model Routing Matrix**.
+
+![Models and AI Providers Management](./docs/screen8.png)
 
 ## Key capabilities
 
-- **Automatic BMAD Installation & Zero-Typing Wizard:** Import existing BMAD folders or provision new ones automatically with a graphical wizard matching the CLI (tool checkboxes, module selectors, language options, release channels).
-- **Full BMad Method Agent Workflow:** Visual drag-and-drop sequencing and configurable feedback loops (e.g. Nella → John, Murat → John) with support for all core agents (Mary, John, Sally, Winston, Amelia, Murat, Nella).
-- **Rich Documentation Library & Asset Viewer:** In-app markdown documentation with relative screenshot/image resolution, interactive image inspection (zoom, pan, dimensions, download), and recursive expand/collapse file tree controls.
+- **Interactive Agent Workflow Canvas:** Visual interactive graph layout with draggable encapsulated nodes, connection ports with `+` branching, and collision-free overhead feedback loops (e.g. Nella → John, Murat → John).
+- **Default Antigravity (AGY) Integration:** Seamlessly routes agent inference through your active Google Antigravity subscription (`gemini-3.8-flash-high`) via local gateway bridge (`host.docker.internal:3005`).
+- **Flexible Models & Providers Matrix:** Project-wide model catalog with one-click routing across Antigravity, Ollama, LM Studio, OpenRouter, OpenAI, and Gemini with individual per-agent overrides.
+- **End-User Advocate Critic Persona:** The Product Owner & Critic agent (Nella) evaluates deliverables from the perspective of an authentic end-user experiencing the product, testing ergonomics and journey clarity before release.
+- **Zero-Typing BMAD Wizard:** Import existing BMAD folders or provision new ones automatically with an interactive graphical wizard matching the CLI (tool checkboxes, module selectors, language options, release channels).
+- **Rich Documentation Library & Asset Viewer:** In-app markdown documentation with relative screenshot/image resolution, interactive image inspection (zoom, pan, dimensions, download), and recursive file tree controls.
 - **Track epics, stories, sprint status, and velocity:** Automatic correlation of numeric and alphanumeric epics from single or split files.
 - **Controlled Local Operations:** BMad Control operating surface with preview, approval queue, and isolated worker execution.
-- **Multi-user authentication & deployment:** Role-based access, GitHub OAuth or email/password, Docker, PostgreSQL, and Traefik.
+- **Docker Compose Production Deployment:** Ready-to-deploy multi-container stack with Next.js 16 standalone, PostgreSQL 17, and automatic database migrations.
 
 ## Stack
 

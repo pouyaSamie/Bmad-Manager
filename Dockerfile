@@ -1,5 +1,5 @@
 # Dockerfile — bmad-manager
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 ENV NODE_OPTIONS="--dns-result-order=ipv4first"
 ENV PRISMA_FETCH_TIMEOUT=60000
@@ -8,12 +8,13 @@ ENV PRISMA_ENGINES_CACHE_DIR=/root/.cache/prisma
 # Copy local Prisma engine cache to avoid remote CDN timeouts
 COPY docker/prisma-cache/ /root/.cache/prisma/
 
-# Install pnpm and prisma globally with cache
+# Install pnpm and prisma globally and pre-extract engines from local cache
 RUN --mount=type=cache,target=/root/.npm \
-    --mount=type=cache,target=/root/.cache/prisma \
-    npm install -g pnpm@11.19.0 prisma@6.19.2
+    npm install -g pnpm@11.19.0 prisma@6.19.2 && \
+    prisma -v && \
+    chmod -R 777 /usr/local/lib/node_modules/prisma
 
-# Set local prisma engine paths so prisma commands never query remote CDN
+# Set local prisma engine paths so prisma commands never query remote CDN or try to write to root paths
 ENV PRISMA_SCHEMA_ENGINE_BINARY=/usr/local/lib/node_modules/prisma/node_modules/@prisma/engines/schema-engine-linux-musl-openssl-3.0.x
 ENV PRISMA_QUERY_ENGINE_LIBRARY=/usr/local/lib/node_modules/prisma/node_modules/@prisma/engines/libquery_engine-linux-musl-openssl-3.0.x.so.node
 
