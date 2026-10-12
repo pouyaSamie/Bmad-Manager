@@ -12,7 +12,7 @@ import type { ActionResult } from "@/lib/types";
 
 const projectSchema = z.object({ owner: z.string().min(1), name: z.string().min(1) });
 const gatewaySchema = projectSchema.extend({ gatewayBaseUrl: z.string().url(), gatewayModel: z.string().min(1).max(200), apiKey: z.string().max(4096).optional() });
-const agentGatewaySchema = projectSchema.extend({ agentId: z.string().min(1), route: z.enum(["project", "openai", "openrouter", "ollama", "lm-studio", "custom"]), gatewayBaseUrl: z.string().url().optional(), gatewayModel: z.string().min(1).max(200).optional(), apiKey: z.string().max(4096).optional() });
+const agentGatewaySchema = projectSchema.extend({ agentId: z.string().min(1), route: z.enum(["project", "agy", "gemini", "openai", "openrouter", "ollama", "lm-studio", "custom"]), gatewayBaseUrl: z.string().url().optional(), gatewayModel: z.string().min(1).max(200).optional(), apiKey: z.string().max(4096).optional() });
 const operationSchema = projectSchema.extend({ kind: z.enum(["install", "update", "write_override", "create_agent", "write_skill", "clone_skill", "customize_agent", "set_workflow"]), payload: z.record(z.string(), z.unknown()) });
 
 async function ownedLocalProject(owner: string, name: string) {
@@ -96,7 +96,7 @@ export async function saveAgentGatewayConfig(input: z.infer<typeof agentGatewayS
       return { success: true, data: { configured: false } };
     }
     if (!parsed.data.gatewayBaseUrl || !parsed.data.gatewayModel) return { success: false, error: "A gateway URL and model are required", code: "VALIDATION" };
-    const routeLabels: Record<string, string> = { openai: "OpenAI / Codex API", openrouter: "OpenRouter", ollama: "Ollama", "lm-studio": "LM Studio", custom: "OpenAI-compatible" };
+    const routeLabels: Record<string, string> = { agy: "Antigravity (AGY)", gemini: "Google Gemini", openai: "OpenAI / Codex API", openrouter: "OpenRouter", ollama: "Ollama", "lm-studio": "LM Studio", custom: "OpenAI-compatible" };
     const data: { providerLabel: string; gatewayBaseUrl: string; gatewayModel: string; encryptedGatewayKey?: string } = { providerLabel: routeLabels[parsed.data.route], gatewayBaseUrl: parsed.data.gatewayBaseUrl.replace(/\/$/, ""), gatewayModel: parsed.data.gatewayModel };
     if (parsed.data.apiKey?.trim()) data.encryptedGatewayKey = encryptSecret(parsed.data.apiKey.trim());
     await prisma.bmadAgent.update({ where: { id: agent.id }, data });
@@ -205,9 +205,15 @@ export async function getGatewayForChat(repoId: string, userId: string, agentId:
   const runtime = await prisma.bmadProjectRuntime.findFirst({ where: { repo: { id: repoId, userId } }, include: { agents: true } });
   const agent = runtime?.agents.find((item) => item.id === agentId);
   if (!runtime || !agent) return null;
-  const gatewayBaseUrl = agent.gatewayBaseUrl ?? runtime.gatewayBaseUrl;
-  const gatewayModel = agent.gatewayModel ?? runtime.gatewayModel;
+  const gatewayBaseUrl = agent.gatewayBaseUrl ?? runtime.gatewayBaseUrl ?? "http://host.docker.internal:3005/v1";
+  const gatewayModel = agent.gatewayModel ?? runtime.gatewayModel ?? "gemini-3.8-flash-high";
   const encryptedGatewayKey = agent.encryptedGatewayKey ?? runtime.encryptedGatewayKey;
-  if (!gatewayBaseUrl || !gatewayModel) return null;
-  return { runtime, agent, gatewayBaseUrl, gatewayModel, providerLabel: agent.providerLabel ?? "Project default", apiKey: encryptedGatewayKey ? decryptSecret(encryptedGatewayKey) : "" };
+  return {
+    runtime,
+    agent,
+    gatewayBaseUrl,
+    gatewayModel,
+    providerLabel: agent.providerLabel ?? (runtime.gatewayBaseUrl ? "Project default" : "Antigravity AGY (Default)"),
+    apiKey: encryptedGatewayKey ? decryptSecret(encryptedGatewayKey) : "",
+  };
 }

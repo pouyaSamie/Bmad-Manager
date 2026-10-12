@@ -33,6 +33,7 @@
     "db:studio": "prisma studio",
     "db:create-admin": "tsx scripts/create-admin.ts",
     "bmad:worker": "tsx scripts/bmad-worker.ts",
+    "agy:gateway": "tsx scripts/agy-gateway.ts",
     "postinstall": "prisma generate",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -81,6 +82,7 @@
     "dotenv": "^17.3.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "playwright": "^1.63.0",
     "prisma": "^6.19.2",
     "shadcn": "^3.8.4",
     "tailwindcss": "^4",
