@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Bot,
   Check,
+  Cpu,
   KeyRound,
   MessageSquare,
   RefreshCw,
@@ -49,9 +50,11 @@ import {
   saveGatewayConfig,
   scanBmadControl,
 } from "@/actions/bmad-control-actions";
+import { WorkflowStudio } from "./workflow-studio";
+import { ModelsProvidersManager } from "./models-providers-manager";
 
 type Props = { owner: string; name: string };
-type Tab = "overview" | "installation" | "agents" | "skills" | "chat" | "activity";
+type Tab = "overview" | "models" | "installation" | "agents" | "skills" | "chat" | "activity";
 
 export type WorkflowLoop = {
   id: string;
@@ -412,6 +415,7 @@ export function BmadControlPanel({ owner, name }: Props) {
   const runtime = data.runtime;
   const tabs: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
+    { id: "models", label: "Models & Providers" },
     { id: "installation", label: "Installation" },
     { id: "agents", label: "Agents" },
     { id: "skills", label: "Skills" },
@@ -453,278 +457,69 @@ export function BmadControlPanel({ owner, name }: Props) {
           <Metric icon={<Sparkles />} title="Skills" value={skills.length} detail="Discovered from .agents/skills" />
           <Metric icon={<ShieldCheck />} title="Approval queue" value={operations.filter((op: any) => op.status === "draft").length} detail="Writes require review" />
 
-          {/* Enhanced Agent Workflow Section */}
-          <section className="rounded-xl border p-5 md:col-span-3 space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="text-lg font-semibold tracking-tight">Agent workflow</h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  The project’s controlled handoff order and feedback loops per the BMad Method lifecycle. Drag stages to visually reorder.
-                </p>
-              </div>
-              <Button
-                size="sm"
-                disabled={busy || !workflowDraft.length}
-                onClick={() => act(() => draftBmadOperation({
+          {/* Visual Agent & Workflow Studio */}
+          <div className="md:col-span-3">
+            <WorkflowStudio
+              agents={agents}
+              skills={skills}
+              workflowDraft={workflowDraft}
+              workflowLoops={workflowLoops}
+              setWorkflowDraft={setWorkflowDraft}
+              setWorkflowLoops={setWorkflowLoops}
+              busy={busy}
+              owner={owner}
+              name={name}
+              runtime={runtime}
+              onDraftSave={() => act(() => draftBmadOperation({
+                owner,
+                name,
+                kind: "set_workflow",
+                payload: { agentIds: workflowDraft, loops: workflowLoops },
+              }))}
+              onSaveAgentGateway={async (payload) => {
+                return act(() => saveAgentGatewayConfig({ owner, name, ...payload }));
+              }}
+              onSaveAgentCustomization={async (payload) => {
+                return act(() => draftBmadOperation({
                   owner,
                   name,
-                  kind: "set_workflow",
-                  payload: { agentIds: workflowDraft, loops: workflowLoops },
-                }))}
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                Draft workflow change
-              </Button>
+                  kind: "customize_agent",
+                  payload,
+                }));
+              }}
+              onCustomizeAgent={(agent) => {
+                setEditingAgent({
+                  ...agent,
+                  skillName: agent.skillName || agent.slug,
+                  persona: agent.persona || "",
+                  scope: agent.scope === "personal" ? "personal" : "team",
+                });
+                setTab("agents");
+              }}
+            />
+          </div>
+
+          {/* Quick Engine Status & Link to Models */}
+          <div className="flex items-center justify-between rounded-xl border border-border/80 bg-card/60 p-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>
+                Default Engine: <strong className="text-foreground">Google Antigravity (Gemini 3.8 Flash)</strong> via active logged-in subscription.
+              </span>
             </div>
-
-            {/* Visual Drag & Drop Stage Sequence */}
-            <div className="rounded-xl border bg-muted/20 p-4">
-              <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-                <span className="font-medium">Linear Stage Pipeline ({workflowAgents.length} stages)</span>
-                <span>Drag stage handle or use arrows to change sequence</span>
-              </div>
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={workflowDraft} strategy={horizontalListSortingStrategy}>
-                  <div className="flex flex-wrap items-stretch gap-2">
-                    {workflowAgents.map((agent: any, index: number) => {
-                      const hasLoopsFrom = workflowLoops.some((l) => l.fromAgentId === agent.id);
-                      const hasLoopsTo = workflowLoops.some((l) => l.toAgentId === agent.id);
-                      return (
-                        <div key={agent.id} className="flex items-center gap-2">
-                          <SortableWorkflowCard
-                            agent={agent}
-                            index={index}
-                            total={workflowAgents.length}
-                            onMoveLeft={() => {
-                              if (index === 0) return;
-                              setWorkflowDraft((curr) => {
-                                const next = [...curr];
-                                [next[index - 1], next[index]] = [next[index], next[index - 1]];
-                                return next;
-                              });
-                            }}
-                            onMoveRight={() => {
-                              if (index === workflowAgents.length - 1) return;
-                              setWorkflowDraft((curr) => {
-                                const next = [...curr];
-                                [next[index + 1], next[index]] = [next[index], next[index + 1]];
-                                return next;
-                              });
-                            }}
-                            onRemove={() => {
-                              setWorkflowDraft((curr) => curr.filter((id) => id !== agent.id));
-                              setWorkflowLoops((curr) => curr.filter((l) => l.fromAgentId !== agent.id && l.toAgentId !== agent.id));
-                            }}
-                            hasLoopsFrom={hasLoopsFrom}
-                            hasLoopsTo={hasLoopsTo}
-                          />
-                          {index < workflowAgents.length - 1 && (
-                            <span className="text-muted-foreground font-bold text-lg select-none">→</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </SortableContext>
-              </DndContext>
-
-              {workflowAgents.length === 0 && (
-                <div className="p-8 text-center text-sm text-muted-foreground">
-                  No agents in workflow. Add agents below to construct the delivery pipeline.
-                </div>
-              )}
-            </div>
-
-            {/* Candidate Agent Addition */}
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                className="h-9 min-w-56 rounded-md border bg-background px-3 text-sm"
-                value={workflowCandidate}
-                onChange={(event) => setWorkflowCandidate(event.target.value)}
-              >
-                <option value="">Add an agent to the workflow…</option>
-                {workflowCandidates.map((agent: any) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.icon} {agent.name} — {agent.title}
-                  </option>
-                ))}
-              </select>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!workflowCandidate}
-                onClick={() => {
-                  setWorkflowDraft((current) => [...current, workflowCandidate]);
-                  setWorkflowCandidate("");
-                }}
-              >
-                <Plus className="mr-1.5 size-3.5" />
-                Add to pipeline
-              </Button>
-            </div>
-
-            {/* Configured Feedback Loops & Decision Gates */}
-            <div className="rounded-xl border p-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
-                <div>
-                  <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                    <RotateCcw className="size-4 text-primary" />
-                    Feedback Loops & Quality Gates ({workflowLoops.length})
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    BMad Method protocols for routing verdicts and review findings back to upstream decision-makers.
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs gap-1"
-                  onClick={() => setShowAddLoop(!showAddLoop)}
-                >
-                  <Plus className="size-3.5" />
-                  {showAddLoop ? "Cancel" : "Add custom loop"}
-                </Button>
-              </div>
-
-              {/* Add Loop Form */}
-              {showAddLoop && (
-                <div className="rounded-lg border border-primary/30 bg-muted/30 p-3 space-y-3">
-                  <p className="text-xs font-medium text-foreground">Configure new feedback loop</p>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <div>
-                      <label className="text-xs text-muted-foreground">From evaluator (source)</label>
-                      <select
-                        className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs"
-                        value={newLoopFrom}
-                        onChange={(e) => setNewLoopFrom(e.target.value)}
-                      >
-                        <option value="">Select source agent…</option>
-                        {workflowAgents.map((a: any) => (
-                          <option key={a.id} value={a.id}>{a.icon} {a.name} ({a.title})</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-muted-foreground">To receiver (target)</label>
-                      <select
-                        className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs"
-                        value={newLoopTo}
-                        onChange={(e) => setNewLoopTo(e.target.value)}
-                      >
-                        <option value="">Select target agent…</option>
-                        {workflowAgents.map((a: any) => (
-                          <option key={a.id} value={a.id}>{a.icon} {a.name} ({a.title})</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-muted-foreground">Trigger condition</label>
-                      <select
-                        className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs"
-                        value={newLoopTrigger}
-                        onChange={(e) => setNewLoopTrigger(e.target.value as WorkflowLoop["trigger"])}
-                      >
-                        <option value="verdicts">Verdicts (PO/Critic QA gate fails)</option>
-                        <option value="findings">Findings (TEA test defects & bugs)</option>
-                        <option value="needs_revision">Needs Revision (Story rework)</option>
-                        <option value="custom">Custom Condition</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-muted-foreground">Description & protocol notes</label>
-                    <Input
-                      className="mt-1 h-8 text-xs"
-                      placeholder="e.g. Pass PO verdicts back to John to write prioritized user stories"
-                      value={newLoopDesc}
-                      onChange={(e) => setNewLoopDesc(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      className="h-7 text-xs"
-                      disabled={!newLoopFrom || !newLoopTo || newLoopFrom === newLoopTo}
-                      onClick={addFeedbackLoop}
-                    >
-                      Save loop
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Loop Items List */}
-              <div className="grid gap-2 sm:grid-cols-2">
-                {workflowLoops.map((loop) => {
-                  const from = agents.find((a: any) => a.id === loop.fromAgentId);
-                  const to = agents.find((a: any) => a.id === loop.toAgentId);
-                  return (
-                    <div
-                      key={loop.id}
-                      className="flex items-start justify-between rounded-lg border bg-card p-3 shadow-2xs gap-2"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                          <span>{from?.icon} {from?.name || "Unknown"}</span>
-                          <span className="text-primary font-bold">↺ passes to</span>
-                          <span>{to?.icon} {to?.name || "Unknown"}</span>
-                          <span className={cn(
-                            "rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wider ml-1",
-                            loop.trigger === "verdicts" && "bg-destructive/10 text-destructive border border-destructive/30",
-                            loop.trigger === "findings" && "bg-warning/10 text-warning-foreground border border-warning/30",
-                            loop.trigger === "needs_revision" && "bg-info/10 text-info border border-info/30",
-                            loop.trigger === "custom" && "bg-muted text-muted-foreground border",
-                          )}>
-                            {loop.trigger}
-                          </span>
-                        </div>
-                        {loop.description && (
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            {loop.description}
-                          </p>
-                        )}
-                      </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-6 text-muted-foreground hover:text-destructive shrink-0"
-                        onClick={() => removeLoop(loop.id)}
-                        title="Delete feedback loop"
-                      >
-                        <Trash2 className="size-3.5" />
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {workflowLoops.length === 0 && (
-                <p className="text-xs text-muted-foreground py-2 italic">
-                  No active feedback loops. Configure loops above to enable iterative agile cycles.
-                </p>
-              )}
-            </div>
-          </section>
-
-          {/* Gateway Configuration */}
-          <section className="rounded-xl border p-5 md:col-span-3">
-            <h2 className="font-semibold">Gateway</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Each project uses its own encrypted OpenAI-compatible API key.</p>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <Input placeholder="https://gateway.example/v1" value={gatewayUrl} onChange={(e) => setGatewayUrl(e.target.value)} />
-              <Input placeholder="Model name" value={gatewayModel} onChange={(e) => setGatewayModel(e.target.value)} />
-              <Input type="password" placeholder={runtime.gatewayConfigured ? "API key saved — enter to replace" : "API key"} value={gatewayKey} onChange={(e) => setGatewayKey(e.target.value)} />
-            </div>
-            <Button className="mt-3" disabled={busy} onClick={() => act(() => saveGatewayConfig({ owner, name, gatewayBaseUrl: gatewayUrl, gatewayModel, apiKey: gatewayKey || undefined }))}>
-              <KeyRound className="mr-2 h-4 w-4" />Save gateway
-            </Button>
-          </section>
+            <button
+              onClick={() => setTab("models")}
+              className="text-primary hover:underline font-medium flex items-center gap-1"
+            >
+              <span>Manage Models & Routing Matrix</span>
+              <ArrowRight className="size-3" />
+            </button>
+          </div>
         </div>
+      )}
+
+      {tab === "models" && (
+        <ModelsProvidersManager owner={owner} name={name} />
       )}
 
       {tab === "installation" && (
@@ -750,7 +545,7 @@ export function BmadControlPanel({ owner, name }: Props) {
                   <p className="mt-1 text-xs text-muted-foreground">Model route: {agent.gatewayConfigured ? `${agent.providerLabel} · ${agent.gatewayModel}` : "Project default gateway"}</p>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant={editingGateway?.id === agent.id ? "default" : "outline"} onClick={() => setEditingGateway(editingGateway?.id === agent.id ? null : { ...agent, route: agent.providerLabel === "OpenAI / Codex API" ? "openai" : agent.providerLabel === "OpenRouter" ? "openrouter" : agent.providerLabel === "Ollama" ? "ollama" : agent.providerLabel === "LM Studio" ? "lm-studio" : agent.gatewayConfigured ? "custom" : "project", apiKey: "" })}>Model route</Button>
+                  <Button size="sm" variant={editingGateway?.id === agent.id ? "default" : "outline"} onClick={() => setEditingGateway(editingGateway?.id === agent.id ? null : { ...agent, route: agent.providerLabel === "Antigravity (AGY)" ? "agy" : agent.providerLabel === "Google Gemini" ? "gemini" : agent.providerLabel === "OpenAI / Codex API" ? "openai" : agent.providerLabel === "OpenRouter" ? "openrouter" : agent.providerLabel === "Ollama" ? "ollama" : agent.providerLabel === "LM Studio" ? "lm-studio" : agent.gatewayConfigured ? "custom" : "project", apiKey: "" })}>Model route</Button>
                   <Button size="sm" variant={editingAgent?.id === agent.id ? "default" : "outline"} onClick={() => setEditingAgent(editingAgent?.id === agent.id ? null : { ...agent, skillName: agent.skillName || agent.slug, persona: agent.persona || "", scope: agent.scope === "personal" ? "personal" : "team" })}>Customize</Button>
                   <Button size="sm" variant="outline" onClick={() => { setSelectedAgent(agent.id); setTab("chat"); }}>Chat</Button>
                 </div>
@@ -765,23 +560,45 @@ export function BmadControlPanel({ owner, name }: Props) {
                     <Button size="sm" variant="ghost" onClick={() => setEditingGateway(null)}>Close</Button>
                   </div>
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <select className="h-9 rounded-md border bg-background px-3 text-sm" value={editingGateway.route} onChange={(event) => { const route = event.target.value; const defaults: Record<string, string> = { openai: "https://api.openai.com/v1", openrouter: "https://openrouter.ai/api/v1", ollama: "http://localhost:11434/v1", "lm-studio": "http://localhost:1234/v1" }; setEditingGateway({ ...editingGateway, route, gatewayBaseUrl: route === "project" ? "" : defaults[route] || editingGateway.gatewayBaseUrl || "" }); }}>
-                      <option value="project">Use project default</option>
-                      <option value="openai">OpenAI / Codex API</option>
-                      <option value="openrouter">OpenRouter</option>
-                      <option value="ollama">Ollama (local)</option>
-                      <option value="lm-studio">LM Studio (local)</option>
-                      <option value="custom">Custom compatible endpoint</option>
+                    <select className="h-9 rounded-md border bg-background px-3 text-sm" value={editingGateway.route} onChange={(event) => {
+                      const route = event.target.value;
+                      const defaults: Record<string, { url: string; model: string }> = {
+                        agy: { url: "http://host.docker.internal:3005/v1", model: "gemini-3.8-flash-high" },
+                        gemini: { url: "https://generativelanguage.googleapis.com/v1beta/openai", model: "gemini-2.0-flash" },
+                        openai: { url: "https://api.openai.com/v1", model: "gpt-4o" },
+                        openrouter: { url: "https://openrouter.ai/api/v1", model: "anthropic/claude-3.7-sonnet" },
+                        ollama: { url: "http://localhost:11434/v1", model: "qwen2.5-coder:latest" },
+                        "lm-studio": { url: "http://localhost:1234/v1", model: "local-model" },
+                      };
+                      setEditingGateway({
+                        ...editingGateway,
+                        route,
+                        gatewayBaseUrl: route === "project" ? "" : defaults[route]?.url || editingGateway.gatewayBaseUrl || "",
+                        gatewayModel: route === "project" ? "" : defaults[route]?.model || editingGateway.gatewayModel || "",
+                      });
+                    }}>
+                      <option value="project">Use project default (Antigravity Gemini 3.8 Flash)</option>
+                      <option value="agy">⚡ Antigravity (AGY Subscription - Gemini 3.8 Flash)</option>
+                      <option value="gemini">🌟 Google Gemini (Direct API)</option>
+                      <option value="openai">🤖 OpenAI / Codex API</option>
+                      <option value="openrouter">🌐 OpenRouter</option>
+                      <option value="ollama">🦙 Ollama (local)</option>
+                      <option value="lm-studio">💻 LM Studio (local)</option>
+                      <option value="custom">⚙️ Custom compatible endpoint</option>
                     </select>
                     {editingGateway.route !== "project" && (
                       <>
                         <Input value={editingGateway.gatewayBaseUrl || ""} onChange={(event) => setEditingGateway({ ...editingGateway, gatewayBaseUrl: event.target.value })} placeholder="https://gateway.example/v1" />
                         <Input value={editingGateway.gatewayModel || ""} onChange={(event) => setEditingGateway({ ...editingGateway, gatewayModel: event.target.value })} placeholder="Model ID" />
-                        <Input className="md:col-span-3" type="password" value={editingGateway.apiKey || ""} onChange={(event) => setEditingGateway({ ...editingGateway, apiKey: event.target.value })} placeholder={agent.gatewayKeyConfigured ? "API key saved — enter only to replace" : "API key (optional for local servers)"} />
+                        {editingGateway.route !== "agy" && (
+                          <Input className="md:col-span-3" type="password" value={editingGateway.apiKey || ""} onChange={(event) => setEditingGateway({ ...editingGateway, apiKey: event.target.value })} placeholder={agent.gatewayKeyConfigured ? "API key saved — enter only to replace" : "API key (optional for local servers)"} />
+                        )}
                       </>
                     )}
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">OpenAI/Codex and OpenRouter normally need an API key. Ollama and LM Studio usually do not. For a containerized app, local gateways may use host.docker.internal instead of localhost.</p>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {editingGateway.route === "agy" ? "Uses your active logged-in Google Antigravity subscription. No API key needed." : "OpenAI/Codex and OpenRouter normally need an API key. Ollama and LM Studio usually do not. For a containerized app, local gateways may use host.docker.internal instead of localhost."}
+                  </p>
                   <Button className="mt-3" disabled={busy || (editingGateway.route !== "project" && (!editingGateway.gatewayBaseUrl || !editingGateway.gatewayModel))} onClick={() => act(() => saveAgentGatewayConfig({ owner, name, agentId: agent.id, route: editingGateway.route, gatewayBaseUrl: editingGateway.gatewayBaseUrl || undefined, gatewayModel: editingGateway.gatewayModel || undefined, apiKey: editingGateway.apiKey || undefined }))}>
                     <KeyRound className="mr-2 h-4 w-4" />Save model route
                   </Button>
