@@ -1,217 +1,181 @@
 # BMad Manager
 
-> A self-hosted command center for [BMad](https://github.com/bmad-method/bmad-method) projects—turning planning files into a clear view of delivery, progress, and controlled project operations.
+A self-hosted workspace for [BMad Method](https://docs.bmad-method.org/) projects. Import a project, configure your AI team, test model conversations, and design handoffs and feedback loops. Read the planning and implementation artifacts alongside the configuration.
 
-BMad Manager is for teams using BMad who want to spend less time opening Markdown and YAML files to answer basic questions: *What are we building? What is in progress? What is blocked? What should happen next?* Connect a GitHub repository or a local BMad folder and get one shared workspace for epics, stories, sprint progress, documentation, and carefully reviewed operations.
+Use one workspace to manage agent settings, compare model connections, and browse your project's source artifacts, with light and dark themes and mobile navigation.
 
-## What it helps you do
+## What you can do
 
-- **See the whole portfolio:** compare project health, completed work, active work, and story counts from one dashboard.
-- **Bootstrap projects instantly:** auto-install BMAD in new or existing local folders with a zero-typing graphical wizard and immediate agent/skill discovery.
-- **Keep delivery understandable:** move from an epic to its stories and their current state without manually reconciling planning artifacts.
-- **Find source material and visual assets:** browse project planning docs with rich markdown rendering, embedded screenshots, and interactive image inspection.
-- **Operate local projects carefully:** use BMad Control to arrange agent workflows with visual drag-and-drop, configure feedback loops, and approve changes safely.
+- Import an installed local project without reinstalling it, or prepare a reviewed installation for a new folder. Already imported folders offer **Open project**.
+- Create reusable, account-owned connections for Ollama, LM Studio, OpenRouter, Codex CLI, AGY, OpenAI, Gemini, and custom compatible endpoints.
+- Assign a project default and individual agent overrides using discovered models. Credentials stay with their connection and are encrypted at rest.
+- Configure an agent's model, persona, skill, and test chat in the same inspector, including from the workflow canvas.
+- Stream test replies using edited settings before saving them; stop a response, retain partial output, and reopen earlier conversations.
+- Design a versioned workflow graph with branches and feedback loops, iteration limits, drag positioning, auto-layout, fit-to-view, undo/redo, and an accessible list view.
+- Search documents, review epics, and filter stories in a list or board.
+- Preview and approve repository changes for a separate worker to apply.
 
-## See it in action
+Workflow graphs and iteration limits are **design settings**. Work management integrations, autonomous execution, ticket creation, merges, and releases are deferred.
 
-### Start with a portfolio view
+## BMad compatibility
 
-The dashboard is the fastest answer to “what is happening across our BMad projects?” It shows active projects, total epics and stories, completed work, and current work in progress before you drill into an individual project.
+Agent behavior is edited as separate supported fields with inherited/team/personal previews and reset controls. Approval previews show file changes and reject stale drafts. Workers serialize writes to the same physical project; interrupted work remains quarantined until its worker is stopped and partial files are reviewed.
 
-![BMad Manager portfolio dashboard](./docs/screen1.png)
+The app detects stable legacy installs and newer Skills CLI/plugin module records. Stable installation uses the pinned v6.12.0 CLI; v7 setup and updates use the native BMad flow. Unknown profiles are never automatically upgraded. See the [deployment migration guide](docs/reliability-upgrade.md) for existing installations.
 
-### Understand one project at a glance
+Overview guides project setup; Library filters documents by initiative and purpose. Connections distinguish catalog access, authentication, and individual model tests. Diagnostics helps identify unavailable connections and worker prerequisites.
 
-Open a project to see its sprint progress, velocity, blockers, key planning files, and epic status in one view. This is the page to use during a stand-up or delivery review.
+![Worker and connection diagnostics](docs/screenshots/diagnostics.png)
 
-![Atlas Platform project overview](./docs/screen2.png)
+## Explore the workspace
 
-### Follow work from epic to outcome
+The examples below show project navigation, agent configuration, workflow design, and document browsing.
 
-The epic timeline makes progress visible across the plan: completed epics, active epics, and work that has not started yet. Each epic links directly to its work items.
+### Projects and project context
 
-![Epic delivery timeline](./docs/screen3.png)
+Switch projects without losing the current workspace context. The overview links directly to agents, workflows, source documents, and existing work artifacts.
 
-### Spot delivery flow on the story board
+![Projects workspace](docs/screenshots/projects.png)
 
-Use the story board to see which work is ready, active, blocked, or complete. Filters let a team focus on a specific epic when planning the next move.
+![Project overview](docs/screenshots/overview.png)
 
-![Story delivery board](./docs/screen4.png)
+### Your AI team
 
-### Keep planning files close to the work
+Installed capabilities, extensions, and managed agents retain their identities across rescans. Missing capabilities remain unavailable with their history preserved.
 
-The library provides a safe in-app browser for BMad planning and implementation artifacts, so you can read the source documents without losing the delivery context.
+![Agent catalog and model assignments](docs/screenshots/agents.png)
 
-![Project documentation library](./docs/screen5.png)
+Choose a connection and a discovered model in the shared inspector. Model routing is saved to the database immediately; persona and skill changes become repository drafts. **Test chat** previews edited settings without applying them.
 
-### Use BMad Control for visual agent orchestration
+![Shared agent model inspector](docs/screenshots/agent-inspector.png)
 
-BMad Control provides an interactive operating surface for local projects. It features an interactive **Agent Workflow Canvas** with squircle node cards, pan/zoom graph navigation, and collision-free overhead feedback loops (QA Defect Loop & PO Critic Verdict Loop).
+### Workflow design
 
-![BMad Control Agent Workflow Canvas](./docs/screen6.png)
+The canvas, list, summaries, and approval preview use the same graph. Feedback loops carry their trigger, payload description, and iteration limit. The Manager seven-agent preset preserves Mary, John, Sally, Winston, Amelia, Murat, and Nella; Nella critiques the experience of a real end user.
 
-### Configure agents, personas, and model routes with one click
+![Theme-aware workflow design with feedback loops](docs/screenshots/workflow.png)
 
-Double-click any node or click **⚙️ Config** to open the in-canvas node configuration modal. Switch between 1-click model presets, customize system personas with pre-populated BMad baselines, and leverage the **End-User Advocate Critic** perspective for Nella to test real customer journeys.
+The preset is Manager configuration, rather than a claim that every member belongs to the official BMad core roster. Installed BMad metadata remains the source of capability discovery. See [BMad agents and skills](https://docs.bmad-method.org/reference/skills-and-agents/) and [customization](https://docs.bmad-method.org/customize/customize-bmad/).
 
-![Agent Node Configuration Modal](./docs/screen7.png)
+### Reusable connections
 
-### Route models across Google Antigravity, local LLMs, and cloud providers
+A catalog response proves reachability. A successful test conversation earns **Tested** status. Provider identity, selected model, and latency come from the adapter rather than the model's self-description.
 
-Manage project-wide inference on the dedicated **Models & AI Providers** page. Connect to your active Google Antigravity subscription (defaulting to `gemini-3.8-flash-high` with zero API key required), run local models with Ollama or LM Studio, or connect cloud gateways like OpenRouter and OpenAI with an interactive **Agent Model Routing Matrix**.
+![Reusable provider connections](docs/screenshots/connections.png)
 
-![Models and AI Providers Management](./docs/screen8.png)
+| State | Meaning |
+| --- | --- |
+| Unverified | Settings saved; no successful verification yet |
+| Reachable | The endpoint returned a model catalog |
+| Authenticated | Authentication verified by the CLI bridge or successful inference |
+| Tested | A real test conversation completed successfully |
+| Unavailable | The latest connection check failed |
 
-## Key capabilities
+Codex CLI uses its signed-in host session through a separate [app-server bridge](https://developers.openai.com/codex/app-server/). It is distinct from OpenAI API access. AGY also runs through a host bridge and refuses test requests unless its permission restrictions can be verified. CLI test sessions run outside project repositories with tools disabled.
 
-- **Interactive Agent Workflow Canvas:** Visual interactive graph layout with draggable encapsulated nodes, connection ports with `+` branching, and collision-free overhead feedback loops (e.g. Nella → John, Murat → John).
-- **Default Antigravity (AGY) Integration:** Seamlessly routes agent inference through your active Google Antigravity subscription (`gemini-3.8-flash-high`) via local gateway bridge (`host.docker.internal:3005`).
-- **Flexible Models & Providers Matrix:** Project-wide model catalog with one-click routing across Antigravity, Ollama, LM Studio, OpenRouter, OpenAI, and Gemini with individual per-agent overrides.
-- **End-User Advocate Critic Persona:** The Product Owner & Critic agent (Nella) evaluates deliverables from the perspective of an authentic end-user experiencing the product, testing ergonomics and journey clarity before release.
-- **Zero-Typing BMAD Wizard:** Import existing BMAD folders or provision new ones automatically with an interactive graphical wizard matching the CLI (tool checkboxes, module selectors, language options, release channels).
-- **Rich Documentation Library & Asset Viewer:** In-app markdown documentation with relative screenshot/image resolution, interactive image inspection (zoom, pan, dimensions, download), and recursive file tree controls.
-- **Track epics, stories, sprint status, and velocity:** Automatic correlation of numeric and alphanumeric epics from single or split files.
-- **Controlled Local Operations:** BMad Control operating surface with preview, approval queue, and isolated worker execution.
-- **Docker Compose Production Deployment:** Ready-to-deploy multi-container stack with Next.js 16 standalone, PostgreSQL 17, and automatic database migrations.
+### Planning files and stories
 
-## Stack
+The library prioritizes planning and implementation documents and supports search and category filters. Stories start in a compact list with visible/total counts and optional board view. Mobile navigation uses a drawer.
+
+![Project document library](docs/screenshots/library.png)
+
+![Filtered story list](docs/screenshots/stories.png)
+
+<img src="docs/screenshots/mobile.png" alt="Mobile story list with project navigation" width="390" />
+
+## Run locally
+
+Use Node.js 22+, pnpm 11+, PostgreSQL, and Docker Compose. The included Compose file mounts `C:/workspace` for Windows local projects; change that mount and `LOCAL_HOST_WORKSPACE` for your machine.
+
+1. Clone the repository and install dependencies:
+
+   ```bash
+   git clone https://github.com/pouyaSamie/Bmad-Manager.git
+   cd Bmad-Manager
+   pnpm install
+   ```
+
+2. Copy `.env.example` to `.env`. Set your database password, `BETTER_AUTH_SECRET`, and a stable 32-byte base64url `AGENT_ENCRYPTION_KEY`. Set `BETTER_AUTH_URL=http://localhost:3002`. Keep the host database URL on `localhost:5433`; Compose supplies the container's internal URL.
+
+3. Start PostgreSQL, apply schema migrations, and create your administrator:
+
+   ```bash
+   docker compose up -d postgres
+   pnpm prisma migrate deploy
+   pnpm db:create-admin --email you@example.com --password "YOUR_PASSWORD" --name Admin
+   ```
+
+4. Start the Docker application:
+
+   ```bash
+   docker compose up -d --build web
+   ```
+
+   Open [localhost:3002](http://localhost:3002). For development, run `pnpm dev` instead of the Docker web service. Use `ALLOW_REGISTRATION=false` after account setup.
+
+5. Run `pnpm bmad:worker` separately on the host when applying approved repository changes. Its database URL and project mapping must point to the same database and folders as the app.
+
+Existing installations also need `pnpm db:migrate-workspace` once. It preserves legacy model routes in separate owner-scoped connections and converts ordered workflows to graphs without writing project files. Read the [workspace upgrade and host bridge guide](docs/workspace-upgrade.md).
+
+## Configure and test a model
+
+1. Open **Connections → Add connection** and choose a provider.
+2. Enter the endpoint and credential only when needed, then **Save and discover models**.
+3. Open **Project → Agents → Configure and test**, choose the connection and model, and save the model assignment. Project defaults live in **Settings**.
+4. Use **Test chat** to try the current model, persona, and skill. A preview does not apply repository customization.
+
+For Codex, set a random `CLI_BRIDGE_TOKEN` of at least 32 characters and run `pnpm codex:gateway` on the signed-in host. Add that token to the Codex CLI connection. The default endpoint in Docker is `http://host.docker.internal:3006/v1`; host applications use `http://localhost:3006/v1`. AGY uses port 3005 and `pnpm agy:gateway`. Bridge networking, restrictions, and optional binary paths are explained in the [bridge guide](docs/workspace-upgrade.md).
+
+Local providers require a running endpoint; cloud providers require credentials. Save a connection, discover its models, and complete a test conversation to check your own configuration. Provider support does not imply that your connection is already authenticated or tested.
+
+## Apply project changes safely
+
+Repository operations follow **draft → preview → approval → queued → worker → applied/failed**. Review the affected agents, files, and changes in **Settings**. A queued operation has not yet been applied.
+
+- Interrupted worker operations require stopping the old worker, checking partial changes, and explicitly releasing the project lock before a new draft can run.
+- Team customization is stored in `_bmad/custom/config.toml` plus per-skill behavior overrides. Personal overrides use gitignored `*.user.toml` files.
+- Installed vendor skills are protected. A managed copy uses a unique destination and preserves supporting resources.
+- Workflow designs are stored in `_bmad/custom/workflow.toml` as Manager configuration.
+- **Unlink** removes the dashboard record while preserving files and Git. Full BMad uninstall is a reviewed worker operation that removes BMad assets while preserving source code and Git.
+
+## Development
+
+| Command | Purpose |
+| --- | --- |
+| `pnpm dev` | Development server on port 3002 |
+| `pnpm build` | Production build and type checking |
+| `pnpm lint` | ESLint |
+| `pnpm test` | Vitest unit suite |
+| `pnpm test:journey` | Browser integration tests with isolated project fixtures |
+| `pnpm db:generate` | Regenerate Prisma client |
+| `pnpm db:migrate` | Create a development migration |
+| `pnpm prisma migrate deploy` | Apply production migrations |
+| `pnpm db:migrate-workspace` | Convert legacy routes and workflow data |
+| `pnpm bmad:worker` | Apply approved repository operations |
+| `pnpm codex:gateway` / `pnpm agy:gateway` | Host CLI bridges |
+
+Browser tests cover the import, configuration, conversation, workflow, and approval journeys across desktop and mobile layouts. Generated reports are stored in ignored `.qa-results/`.
+
+Set `QA_BASE_URL`, `QA_EMAIL`, `QA_PASSWORD`, `QA_WORKSPACE`, and `QA_BROWSER` to match your local test environment. Run this only against a development database with access to the same workspace as Docker and the worker. Real Codex testing runs when a connection named **Codex CLI** is configured for that account.
+
+Screenshot maintenance: set `QA_EMAIL`, `QA_PASSWORD`, and `QA_PROJECT_PATH` (for example `/repo/local/my-project`), then run `pnpm exec tsx scripts/capture-readme.ts`. The script captures existing screens without applying project changes.
+
+## Stack and project conventions
 
 | Area | Technology |
 | --- | --- |
 | Application | Next.js 16, React 19, TypeScript |
-| UI | Tailwind CSS v4, shadcn/ui |
-| Data | PostgreSQL, Prisma |
+| Interface | Mantine, React Flow, Tailwind CSS v4 |
+| Data | PostgreSQL 17, Prisma |
 | Authentication | Better Auth |
-| Repository access | GitHub API via Octokit |
-| Testing | Vitest |
-| Deployment | Docker and Traefik |
+| GitHub access | Octokit |
+| Tests | Unit and browser integration tests |
+| Deployment | Docker; optional Traefik production setup |
 
-## Get started
+Planning artifacts live in `_bmad-output/planning-artifacts/`; implementation artifacts in `_bmad-output/implementation-artifacts/`. Numeric and alphanumeric epic/story identifiers are supported. Existing document URLs remain valid; legacy Control and Models URLs redirect to Workflow and Settings.
 
-### Use your own project locally
-
-**Requirements:** Node.js 20+, pnpm 10+, Docker, and Docker Compose.
-
-```bash
-git clone https://github.com/pouyaSamie/Bmad-Manager.git
-cd Bmad-Manager
-pnpm install
-
-# Copy .env.example to .env and fill in the required values.
-docker compose up -d
-pnpm db:migrate
-pnpm db:create-admin --email you@example.com --password your-password --name Admin
-pnpm dev
-```
-
-Open [http://localhost:3002](http://localhost:3002), sign in, then add a GitHub repository or local BMad folder. For environment variables and detailed setup, read [Getting Started](./docs/GETTING_STARTED.md).
-
-## How to use BMad Manager
-
-### 1. Add a BMad project
-
-Select **Add project** in the sidebar. You can import a remote GitHub repository or choose a local folder in a self-hosted installation:
-- **Existing BMAD folder:** Automatically detected and imported with immediate agent and skill discovery.
-- **New or empty project folder:** BMAD Manager automatically prompts you to install BMAD with a zero-typing graphical wizard. Choose target tools/IDEs via checkboxes (Codex, Claude Code, Cursor, Copilot, Antigravity, etc.), select modules (`bmm`, `bmb`), choose languages from dropdowns, and select release channels without manual command-line typing. BMAD is installed non-interactively and configured immediately.
-
-### 2. Start each review from the dashboard
-
-Use the dashboard to see every imported project’s delivery state. The summary cards show project count, epics, stories, completed work, and work in progress; select a project card to investigate it.
-
-### 3. Review delivery at the right level
-
-- **Overview** is the project health page: sprint progress, velocity, blockers, key files, and epic status.
-- **Epics** shows the plan in sequence, from completed work to upcoming outcomes.
-- **Stories** provides a board or backlog view. Filter by epic when planning the next delivery slice.
-
-### 4. Read source artifacts and inspect assets in the Docs Library
-
-Open **Docs Library** to browse project artifacts:
-- **Rich Markdown Rendering:** PRDs, architecture documents, and stories render formatted markdown with embedded screenshots and relative project image streaming (`/api/repo/.../raw`).
-- **Interactive Image Viewer:** Click any image in the file tree to open the full-resolution inspection viewer with zoom in/out, pan, transparency check pattern, and direct download.
-- **File Tree Controls:** Quickly navigate deep directory structures with **Expand all** and **Collapse all** toolbar buttons.
-
-### 5. Operate and customize workflows in BMad Control
-
-For local projects, open **BMad Control** to inspect and manage your project runtime:
-- **Agent Workflow Progression:** Inspect the complete core agent team: Mary (Analyst) → John (PM) → Sally (UX) → Winston (Architect) → Amelia (Dev) → Murat (QA Advisor) → Nella (Product Owner & Design Critic).
-- **Visual Reordering & Drag-and-Drop:** Visually adjust the execution sequence using intuitive grab handles and directional controls.
-- **Configurable Feedback Loops:** Define review channels (e.g. Nella's PO verdicts → John for story iteration, Murat's test findings → John for triage) persisted in `_bmad/custom/workflow.toml`.
-- **Safe Execution Surface:** Draft operations to preview CLI commands, approve them after review, and let the background worker (`pnpm bmad:worker`) process them safely.
-
-### 6. Customize Agents, Skills, and Delivery Workflows
-
-BMad Manager provides a complete, visual implementation of the official [BMad Method Customization specification](https://docs.bmad-method.org/customize/customize-bmad/):
-
-- **Customize an Agent:** In the **Agents** tab, click **Customize** on any agent (e.g. Mary, John, Amelia, Murat, Nella) to adjust name, title, emoji icon, identity statement, communication style, principles, persistent facts, activation hooks, or menu actions. Choose between **Team Scope** (`_bmad/custom/<agent>.toml` or `_bmad/custom/config.toml`, committed to git) and **Personal Scope** (`.user.toml`, gitignored for private developer preferences).
-- **Customize & Clone Skills:** Shipped vendor skills in `.agents/skills/` are protected and read-only. In the **Skills** tab, click **Clone** to create a project-owned copy in `.agents/skills/<slug>/SKILL.md` that you can freely edit, or click **New managed skill** to author custom skills from scratch.
-- **Assign Skills to Agents:** Connect an agent to a specific skill directly from either interface:
-  - From **Agents** → **Customize**, select any installed or cloned skill from the **Assigned Skill** dropdown.
-  - From **Skills** → **Clone**, select an agent from the **Assign to agent** dropdown.
-  - When creating a new agent in **New managed agent**, pick an existing skill or let BMad Manager auto-scaffold a matching portable skill.
-  - This persists `skill = "<skill_name>"` in `_bmad/custom/config.toml`, ensuring the agent dispatches that skill upon activation.
-- **Add Agents to the Delivery Workflow:**
-  1. Open the **Overview** (Workflow) tab.
-  2. In the **Add an agent to the workflow…** selector, choose any candidate, customized, or newly created agent and click **Add to pipeline**.
-  3. Drag and drop the agent card (or use the arrow buttons) to reposition it anywhere in the delivery progression (e.g. placing a Security Reviewer between Dev and QA).
-  4. Configure feedback loops (e.g. routing QA findings or critic verdicts to the PM or custom agent).
-  5. Click **Save Workflow Sequence & Loops**, review the drafted changes in **Activity & approvals**, and approve. The background worker writes `_bmad/custom/workflow.toml`.
-
-### Run the BMad Control worker
-
-BMad Control is available for imported local projects. It uses encrypted gateway credentials and a dedicated worker, so the web application does not execute queued operations itself.
-
-Add a stable 32-byte base64url `AGENT_ENCRYPTION_KEY` to `.env`, then run the application and worker in separate terminals:
-
-```bash
-pnpm dev
-pnpm bmad:worker
-```
-
-Operations are previewed before approval, limited to allowlisted project actions, and recorded with redacted output. Read the [BMad Control guide](./docs/BMAD_CONTROL.md) before enabling it.
-
-## Development commands
-
-```bash
-pnpm dev              # Start the development server on port 3002
-pnpm build            # Create a production build
-pnpm start            # Run the production server
-pnpm lint             # Run ESLint
-pnpm test             # Run the Vitest suite
-pnpm test:watch       # Run Vitest in watch mode
-pnpm db:generate      # Generate the Prisma client
-pnpm db:migrate       # Create and apply a development migration
-pnpm db:push          # Push the schema without creating a migration
-pnpm db:studio        # Open Prisma Studio
-pnpm db:create-admin  # Create an administrator account
-pnpm bmad:worker      # Process approved BMad Control operations
-```
-
-## BMad project conventions
-
-BMad Manager supports numeric and alphanumeric epic identifiers.
-
-| Artifact | Example | Detected ID |
-| --- | --- | --- |
-| Epic heading | `## Epic 1: Foundation` | `1` |
-| Epic heading | `## Epic DevOps/Infra: Pipeline` | `devops-infra` |
-| Epic file | `planning-artifacts/epics/epic-housekeeping.md` | `housekeeping` |
-| Story file | `implementation-artifacts/1-2-setup.md` | `1.2` |
-| Story file | `implementation-artifacts/DI-1-pipeline.md` | `di.1` |
-
-For alphanumeric epic headings, use the `Epic` keyword so ordinary headings are not mistakenly treated as epics.
-
-## Deploying
-
-The included production setup runs the application, PostgreSQL, and Traefik with automatic TLS. Follow the [production deployment guide](./docker/DEPLOY.md) for the required environment variables and commands.
-
-## Documentation
-
-- [Getting Started](./docs/GETTING_STARTED.md) — local setup and configuration
-- [Local Folder Import](./docs/LOCAL_FOLDER.md) — importing projects from the filesystem
-- [BMad Control](./docs/BMAD_CONTROL.md) — controlled local-project operations
-- [API Reference](./docs/API.md) — health and cache-revalidation endpoints
+Read [AGENTS.md](AGENTS.md) for contribution conventions, the [API reference](docs/API.md) for health/cache endpoints, and [production deployment](docker/DEPLOY.md) for the hosted stack.
 
 ## License
 
-Distributed under the [MIT License](./LICENSE).
+[MIT](LICENSE).
