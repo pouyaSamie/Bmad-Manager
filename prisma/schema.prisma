@@ -21,6 +21,7 @@ model User {
   sessions      Session[]
   accounts      Account[]
   repos         Repo[]
+  connections   BmadConnection[]
 
   @@map("users")
 }
@@ -105,6 +106,9 @@ model BmadProjectRuntime {
   tools               Json?
   modules             Json?
   workflow            Json?
+  connectionId        String?
+  connection          BmadConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  modelId             String?
   lastScannedAt       DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -133,6 +137,10 @@ model BmadAgent {
   encryptedGatewayKey String?
   source        String   @default("discovered")
   scope         String   @default("team")
+  available     Boolean  @default(true)
+  connectionId  String?
+  connection    BmadConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  modelId       String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   conversations BmadConversation[]
@@ -180,10 +188,32 @@ model BmadMessage {
   role           String
   content        String
   proposals      Json?
+  status         String   @default("completed")
+  metadata       Json?
   createdAt      DateTime @default(now())
 
   @@index([conversationId, createdAt])
   @@map("bmad_messages")
+}
+
+model BmadConnection {
+  id           String @id @default(cuid())
+  userId       String
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  provider     String
+  baseUrl      String
+  encryptedKey String?
+  models       Json?
+  status       String @default("unverified")
+  checkedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  projects     BmadProjectRuntime[]
+  agents       BmadAgent[]
+
+  @@index([userId])
+  @@map("bmad_connections")
 }
 
 model BmadOperation {
