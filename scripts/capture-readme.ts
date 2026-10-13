@@ -25,6 +25,9 @@ async function main() {
     viewport: { width: 1440, height: 1000 },
   });
   const page = await context.newPage();
+  page.on("dialog", async (d) => {
+    await d.accept();
+  });
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   async function visit(route: string) {
@@ -52,6 +55,7 @@ async function main() {
     await theme("light");
     await snap("projects");
     await visit(project);
+    await page.getByRole("heading",{name:"Project setup",exact:true}).waitFor({timeout:20000});
     await snap("overview");
     await visit(project + "/agents");
     await page
@@ -85,6 +89,8 @@ async function main() {
     await visit("/connections");
     await theme("light");
     await snap("connections");
+    await visit("/diagnostics");
+    await snap("diagnostics");
     await visit(project + "/docs");
     const document = page.getByRole("button", { name: /^epics\.md/ });
     if (await document.count()) {
@@ -124,7 +130,7 @@ async function main() {
         2,
       ) + "\n",
     );
-    console.log("Captured nine README images without saving project changes.");
+    console.log("Captured ten README images without saving project changes.");
   } finally {
     await browser.close();
   }

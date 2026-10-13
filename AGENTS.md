@@ -54,8 +54,11 @@ import { sanitizeError } from "@/lib/errors";
 - **Directory Structure:**
   - Planning artifacts: `_bmad-output/planning-artifacts/` (PRDs, architecture, epics)
   - Implementation artifacts: `_bmad-output/implementation-artifacts/` (sprints, stories)
-  - Vendor-installed skills are read-only; discover installed metadata and supported tool-specific directories (`.agents/skills/`, `.agent/skills/`, `.claude/skills/`, `.cline/skills/`, `.bob/skills/`, `.adal/skills/`).
+  - Vendor-installed skills are read-only; discover installed metadata and supported tool-specific directories (`.agents/skills/`, `.agent/skills/`, `.claude/skills/`, `.cursor/skills/`, `.cline/skills/`, `.bob/skills/`, `.adal/skills/`).
   - Custom overrides & workflows: `_bmad/custom/` (committed) and `*.user.toml` (gitignored)
+- **Installation Compatibility:**
+  - Detect the installation method, exact version, tools, modules, and remembered answers before changing it. Stable legacy installs use pinned `bmad-method@6.12.0`; updates preserve existing settings. Unknown profiles cannot be automatically updated.
+  - Detect v7 through `bmod.toml` records, not module version prefixes. V7 uses its installed `bmad setup` or plugin update flow; Manager does not execute setup agents or silently switch generations.
 - **Non-Interactive CLI Installation:**
   - Always pass `--directory <projectRoot>` to `bmad-method install --yes`. Without `--directory`, the CLI prompts for interactive directory confirmation, causing background processes to hang indefinitely.
 - **Zero-Manual-Typing UI Standard:**
@@ -68,7 +71,9 @@ import { sanitizeError } from "@/lib/errors";
   - Web application never executes system writes or CLI operations directly on local project repositories.
   - All operations are drafted into `prisma.bmadOperation` with `status: "draft"`, previewed in the UI, approved by the user (`status: "queued"`), and executed by the separate worker (`pnpm bmad:worker`).
   - Worker output is redacted to protect sensitive tokens/paths.
-  - Claim queued operations atomically. Validate payloads and paths again in the worker, write configuration files atomically, and restore previous customization files if the installed resolver rejects a change.
+  - Claim queued operations atomically and serialize writes by canonical physical workspace using database leases and heartbeats. Expired operations remain quarantined until the old worker is stopped, partial files are reviewed, and the lock is explicitly released. Never automatically replay interrupted operations.
+  - Check reviewed file/folder fingerprints at approval and application; stale drafts require a fresh review.
+  - Validate payloads and paths again in the worker, write configuration files atomically, and restore previous customization files if the installed resolver rejects a change.
   - Approval previews must explain affected agents, files, and before/after changes using human-readable names. Queued does not mean applied.
 - **Project Lifecycle & Safe Deletion Model:**
   - **Unlink from Dashboard (Safe Default):** Removes project record from database and dashboard only. Local source code, filesystem folders, BMAD artifacts (`_bmad/`, `_bmad-output/`, `.agents/skills/`), and git history remain 100% untouched.
@@ -80,8 +85,9 @@ import { sanitizeError } from "@/lib/errors";
 
 - **Agent Customization:**
   - Central roster descriptors live in `_bmad/custom/config.toml` (or `config.user.toml`) under `[agents.<slug>]` with `name`, `title`, `icon`, `description`, and `skill`.
-  - Supported behavior overrides live in `_bmad/custom/<skill>.toml` (or `<skill>.user.toml`), validated against installed `customize.toml` schemas and the installed resolver when present. The inspector's persona maps to the supported agent identity field.
-  - Use proper TOML parsing/serialization (`smol-toml`), not regular-expression editing. Preserve native/team/personal override semantics and legacy Manager bindings; preview legacy file conversions before worker execution.
+  - Edit role, identity, communication style, principles, facts, hooks, and menu actions separately. Write only edited fields; resets remove overrides. Never save a flattened effective persona back into identity.
+  - Supported behavior overrides live in `_bmad/custom/<skill>.toml` (or `<skill>.user.toml`), validated against installed `customize.toml` schemas and the installed resolver when present. Each edited behavior field maps to its supported native schema field.
+  - Use the BOM-safe plain-table parser in `src/lib/toml.ts` and `smol-toml` serialization, not regular-expression editing. Preserve native/team/personal override semantics and legacy Manager bindings; preview legacy file conversions before worker execution.
   - Scopes: Team scope (`.toml`) is committed to Git; personal scope (`.user.toml`) is gitignored.
   - Reconcile rescans by stable identity. Preserve model routes, conversations, and workflow references; mark missing capabilities unavailable instead of deleting their history.
 - **Skill Customization & Cloning:**
@@ -129,6 +135,7 @@ import { sanitizeError } from "@/lib/errors";
   - Model catalogs come from the actual CLI. Do not hard-code a default model or imply that a provider is authenticated/tested without evidence.
 - **Test Conversations:**
   - `/api/bmad/chat` checks project ownership, agent availability, connection ownership, and conversation/agent binding. Keep recent history bounded.
+  - Require a provider completion marker before recording success or tested status. Keep catalog, authentication, and per-model evidence distinct. Paginate saved messages using stable, ownership-checked message cursors.
   - Normalize streaming into metadata/text/completion/error events; buffer split SSE/UTF-8 chunks and support cancellation/timeouts. Retain partial output and distinguish failed/cancelled turns from completed turns.
   - Test edited model/persona/skill settings without saving them, clearly identifying preview settings. Report adapter-selected provider/model/latency rather than relying on a model to identify itself.
   - Sanitize errors and redact secrets/paths. Decrypt credentials only in internal server code; never expose secret-bearing routing helpers as public server actions.
