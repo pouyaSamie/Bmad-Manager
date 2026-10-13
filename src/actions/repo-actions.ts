@@ -1,4 +1,5 @@
 "use server";
+import { operationFilePreview } from "@/lib/operation-files";
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { repoTag } from "@/lib/github/cache-tags";
@@ -28,11 +29,10 @@ import { getAuthenticatedSession } from "@/lib/db/helpers";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { z } from "zod";
 import { createHash } from "node:crypto";
-import fs from "node:fs/promises";
 
 import {
-  runBmadInstaller,
   syncProjectBmadRuntime,
+  discoverBmad,
   type BmadInstallOptions,
 } from "@/lib/bmad-control";
 import type { GitHubRepo } from "@/lib/github/types";
@@ -64,7 +64,10 @@ const BMAD_CORE = "_bmad";
  * For GitHub-only actions.
  */
 async function getAuthenticatedOctokit(): Promise<
-  ActionResult<{ octokit: ReturnType<typeof createUserOctokit>; userId: string }>
+  ActionResult<{
+    octokit: ReturnType<typeof createUserOctokit>;
+    userId: string;
+  }>
 > {
   const session = await getAuthenticatedSession();
   if (!session) {
@@ -90,7 +93,9 @@ async function getAuthenticatedOctokit(): Promise<
  * Get authenticated user ID only (no GitHub token required).
  * For actions that work with both GitHub and local repos.
  */
-async function requireAuthenticated(): Promise<ActionResult<{ userId: string }>> {
+async function requireAuthenticated(): Promise<
+  ActionResult<{ userId: string }>
+> {
   const session = await getAuthenticatedSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHORIZED" };
@@ -118,7 +123,7 @@ export async function listUserRepos(): Promise<ActionResult<GitHubRepo[]>> {
   try {
     const repos = await octokit.paginate(
       octokit.rest.repos.listForAuthenticatedUser,
-      { per_page: 100, sort: "updated" }
+      { per_page: 100, sort: "updated" },
     );
 
     const mapped: GitHubRepo[] = repos.map((r) => ({
@@ -147,7 +152,11 @@ export async function listUserRepos(): Promise<ActionResult<GitHubRepo[]>> {
         code: "RATE_LIMITED",
       };
     }
-    return { success: false, error: sanitizeError(error, "GITHUB_ERROR"), code: "GITHUB_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(error, "GITHUB_ERROR"),
+      code: "GITHUB_ERROR",
+    };
   }
 }
 
@@ -163,7 +172,7 @@ export async function listUserRepos(): Promise<ActionResult<GitHubRepo[]>> {
  *             we actually have no information.
  */
 export async function detectBmadRepos(
-  repoIds: { fullName: string; owner: string; name: string }[]
+  repoIds: { fullName: string; owner: string; name: string }[],
 ): Promise<ActionResult<Record<string, boolean | null>>> {
   const authResult = await getAuthenticatedOctokit();
   if (!authResult.success) return authResult;
@@ -204,7 +213,10 @@ export async function detectBmadRepos(
     try {
       const response: Record<
         string,
-        { bmad: { __typename: string } | null; bmadOutput: { __typename: string } | null } | null
+        {
+          bmad: { __typename: string } | null;
+          bmadOutput: { __typename: string } | null;
+        } | null
       > = await octokit.graphql(query, variables);
 
       chunk.forEach((repo, idx) => {
@@ -214,7 +226,7 @@ export async function detectBmadRepos(
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
       console.warn(
-        `[detectBmadRepos] GraphQL batch ${i / GRAPHQL_BATCH_SIZE + 1} failed: ${msg}`
+        `[detectBmadRepos] GraphQL batch ${i / GRAPHQL_BATCH_SIZE + 1} failed: ${msg}`,
       );
       // Mark this batch as unknown rather than confirmed-absent so the
       // UI can surface the detection gap. Coercing to false here would
@@ -295,7 +307,11 @@ export async function importRepo(input: {
         code: "DUPLICATE",
       };
     }
-    return { success: false, error: sanitizeError(error, "DB_ERROR"), code: "DB_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(error, "DB_ERROR"),
+      code: "DB_ERROR",
+    };
   }
 }
 
@@ -342,10 +358,44 @@ export async function deleteRepo(input: {
     const uninstalledBmad = false;
 
     // If local repo and uninstallBmad requested, clean up BMAD folders from disk
-    if(parsed.data.uninstallBmad&&repo.sourceType==='local'&&repo.localPath){
- const runtime=await prisma.bmadProjectRuntime.upsert({where:{repoId:repo.id},create:{repoId:repo.id},update:{}});
- await prisma.bmadOperation.create({data:{runtimeId:runtime.id,kind:'uninstall',status:'draft',createdById:userId,payload:{},preview:{summary:'Uninstall BMad and unlink project',writes:['_bmad/','_bmad-output/','.agents/skills/'],preserves:['Source code','Git repository']}}});revalidatePath('/repo/'+parsed.data.owner+'/'+parsed.data.name+'/settings');return {success:true,data:{deleted:false,uninstalledBmad:false}};
- }
+    if (
+      parsed.data.uninstallBmad &&
+      repo.sourceType === "local" &&
+      repo.localPath
+    ) {
+      const runtime = await prisma.bmadProjectRuntime.upsert({
+        where: { repoId: repo.id },
+        create: { repoId: repo.id },
+        update: {},
+      });
+      await prisma.bmadOperation.create({
+        data: {
+          runtimeId: runtime.id,
+          kind: "uninstall",
+          status: "draft",
+          createdById: userId,
+          payload: {},
+          preview: {
+            version: 2,
+            fileChanges: await operationFilePreview(
+              repo.localPath!,
+              "uninstall",
+              {},
+            ),
+            summary: "Uninstall BMad and unlink project",
+            writes: ["_bmad/", "_bmad-output/", ".agents/skills/"],
+            preserves: ["Source code", "Git repository"],
+          },
+        },
+      });
+      revalidatePath(
+        "/repo/" + parsed.data.owner + "/" + parsed.data.name + "/settings",
+      );
+      return {
+        success: true,
+        data: { deleted: false, uninstalledBmad: false },
+      };
+    }
     await prisma.repo.delete({
       where: { id: repo.id },
     });
@@ -354,7 +404,11 @@ export async function deleteRepo(input: {
     revalidatePath("/");
     return { success: true, data: { deleted: true, uninstalledBmad } };
   } catch (error: unknown) {
-    return { success: false, error: sanitizeError(error, "DB_ERROR"), code: "DB_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(error, "DB_ERROR"),
+      code: "DB_ERROR",
+    };
   }
 }
 
@@ -409,15 +463,24 @@ export async function refreshRepoData(input: {
         code: "RATE_LIMITED",
       };
     }
-    return { success: false, error: sanitizeError(error, "GITHUB_ERROR"), code: "GITHUB_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(error, "GITHUB_ERROR"),
+      code: "GITHUB_ERROR",
+    };
   }
 }
 
-async function refreshLocalRepo(
-  repoConfig: { id: string; localPath: string | null },
-): Promise<ActionResult<{ totalFiles: number; lastSyncedAt: string }>> {
+async function refreshLocalRepo(repoConfig: {
+  id: string;
+  localPath: string | null;
+}): Promise<ActionResult<{ totalFiles: number; lastSyncedAt: string }>> {
   if (!repoConfig.localPath) {
-    return { success: false, error: sanitizeError(null, "FS_ERROR"), code: "FS_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(null, "FS_ERROR"),
+      code: "FS_ERROR",
+    };
   }
 
   try {
@@ -429,7 +492,9 @@ async function refreshLocalRepo(
       provider,
       initialTree.paths,
     );
-    const totalFiles = paths.filter((p) => p.startsWith(outputDir + "/")).length;
+    const totalFiles = paths.filter((p) =>
+      p.startsWith(outputDir + "/"),
+    ).length;
 
     const now = new Date();
     await prisma.repo.update({
@@ -441,13 +506,24 @@ async function refreshLocalRepo(
     revalidatePath("/(dashboard)");
     // F37: No revalidateTag for local repos (no unstable_cache)
 
-    return { success: true, data: { totalFiles, lastSyncedAt: now.toISOString() } };
+    return {
+      success: true,
+      data: { totalFiles, lastSyncedAt: now.toISOString() },
+    };
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "";
     if (msg === "PATH_NOT_FOUND" || msg === "LOCAL_DISABLED") {
-      return { success: false, error: sanitizeError(error, "PATH_STALE"), code: "PATH_STALE" };
+      return {
+        success: false,
+        error: sanitizeError(error, "PATH_STALE"),
+        code: "PATH_STALE",
+      };
     }
-    return { success: false, error: sanitizeError(error, "FS_ERROR"), code: "FS_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(error, "FS_ERROR"),
+      code: "FS_ERROR",
+    };
   }
 }
 
@@ -458,7 +534,11 @@ async function refreshGitHubRepo(
 ): Promise<ActionResult<{ totalFiles: number; lastSyncedAt: string }>> {
   const token = await getGitHubToken(userId);
   if (!token) {
-    return { success: false, error: "GitHub OAuth token not found.", code: "TOKEN_MISSING" };
+    return {
+      success: false,
+      error: "GitHub OAuth token not found.",
+      code: "TOKEN_MISSING",
+    };
   }
   const octokit = createUserOctokit(token);
 
@@ -494,7 +574,9 @@ async function refreshGitHubRepo(
   };
   const { outputDir } = await getBmadConfig(ghProviderShim, allPaths);
 
-  const totalFiles = allPaths.filter((p) => p.startsWith(outputDir + "/")).length;
+  const totalFiles = allPaths.filter((p) =>
+    p.startsWith(outputDir + "/"),
+  ).length;
 
   const now = new Date();
   await prisma.repo.update({
@@ -508,7 +590,10 @@ async function refreshGitHubRepo(
   // with no recovery path until a future successful refresh.
   revalidateTag(repoTag(input.owner, input.name), "default");
 
-  return { success: true, data: { totalFiles, lastSyncedAt: now.toISOString() } };
+  return {
+    success: true,
+    data: { totalFiles, lastSyncedAt: now.toISOString() },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -556,7 +641,11 @@ export async function fetchBmadFiles(input: {
   try {
     if (repoConfig.sourceType === "local") {
       if (!repoConfig.localPath) {
-        return { success: false, error: sanitizeError(null, "FS_ERROR"), code: "FS_ERROR" };
+        return {
+          success: false,
+          error: sanitizeError(null, "FS_ERROR"),
+          code: "FS_ERROR",
+        };
       }
       return fetchBmadFilesLocal(repoConfig.localPath);
     }
@@ -564,7 +653,11 @@ export async function fetchBmadFiles(input: {
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "";
     if (msg === "PATH_NOT_FOUND" || msg === "LOCAL_DISABLED") {
-      return { success: false, error: sanitizeError(error, "PATH_STALE"), code: "PATH_STALE" };
+      return {
+        success: false,
+        error: sanitizeError(error, "PATH_STALE"),
+        code: "PATH_STALE",
+      };
     }
     if (
       typeof error === "object" &&
@@ -578,7 +671,11 @@ export async function fetchBmadFiles(input: {
         code: "RATE_LIMITED",
       };
     }
-    return { success: false, error: sanitizeError(error, "GITHUB_ERROR"), code: "GITHUB_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(error, "GITHUB_ERROR"),
+      code: "GITHUB_ERROR",
+    };
   }
 }
 
@@ -598,9 +695,8 @@ async function fetchBmadFilesLocal(localPath: string) {
   const bmadCoreTree = buildFileTree(bmadCorePaths, BMAD_CORE);
 
   // F20/F35: Detect docs/ via rootDirectories
-  const docsFolderName = initialTree.rootDirectories.find(
-    (d) => d.toLowerCase() === "docs"
-  ) ?? null;
+  const docsFolderName =
+    initialTree.rootDirectories.find((d) => d.toLowerCase() === "docs") ?? null;
   const docsTree = docsFolderName
     ? buildFileTree(
         allPaths.filter((p) => p.startsWith(docsFolderName + "/")),
@@ -608,7 +704,10 @@ async function fetchBmadFilesLocal(localPath: string) {
       )
     : [];
 
-  return { success: true as const, data: { fileTree, docsTree, bmadCoreTree, bmadFiles: bmadPaths } };
+  return {
+    success: true as const,
+    data: { fileTree, docsTree, bmadCoreTree, bmadFiles: bmadPaths },
+  };
 }
 
 async function fetchBmadFilesGitHub(
@@ -618,7 +717,11 @@ async function fetchBmadFilesGitHub(
 ) {
   const token = await getGitHubToken(userId);
   if (!token) {
-    return { success: false as const, error: "GitHub OAuth token not found.", code: "TOKEN_MISSING" };
+    return {
+      success: false as const,
+      error: "GitHub OAuth token not found.",
+      code: "TOKEN_MISSING",
+    };
   }
   const octokit = createUserOctokit(token);
 
@@ -673,7 +776,10 @@ async function fetchBmadFilesGitHub(
       )
     : [];
 
-  return { success: true as const, data: { fileTree, docsTree, bmadCoreTree, bmadFiles: bmadPaths } };
+  return {
+    success: true as const,
+    data: { fileTree, docsTree, bmadCoreTree, bmadFiles: bmadPaths },
+  };
 }
 
 const fetchFileContentSchema = z.object({
@@ -724,7 +830,16 @@ export async function fetchFileContent(input: {
   }
 
   const ext = parsed.data.path.split(".").pop()?.toLowerCase() ?? "";
-  const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "svg", "webp", "gif", "bmp", "ico"]);
+  const IMAGE_EXTS = new Set([
+    "png",
+    "jpg",
+    "jpeg",
+    "svg",
+    "webp",
+    "gif",
+    "bmp",
+    "ico",
+  ]);
   let contentType: "markdown" | "yaml" | "json" | "text" | "image" = "text";
   if (ext === "md") contentType = "markdown";
   else if (ext === "yaml" || ext === "yml") contentType = "yaml";
@@ -741,7 +856,11 @@ export async function fetchFileContent(input: {
 
     if (repoConfig.sourceType === "local") {
       if (!repoConfig.localPath) {
-        return { success: false, error: sanitizeError(null, "FS_ERROR"), code: "FS_ERROR" };
+        return {
+          success: false,
+          error: sanitizeError(null, "FS_ERROR"),
+          code: "FS_ERROR",
+        };
       }
       const provider = new LocalProvider(repoConfig.localPath);
       // The default LocalProvider whitelist covers `_bmad` and `_bmad-output`.
@@ -774,22 +893,23 @@ export async function fetchFileContent(input: {
           // refused with "Access denied". This catch is observability
           // only — surface the failed validation in logs instead of
           // letting it disappear silently.
-          console.warn(
-            "[fetchFileContent] extendBmadDirs failed",
-            {
-              owner: parsed.data.owner,
-              name: parsed.data.name,
-              segment: topSegment,
-              error: err instanceof Error ? err.message : String(err),
-            },
-          );
+          console.warn("[fetchFileContent] extendBmadDirs failed", {
+            owner: parsed.data.owner,
+            name: parsed.data.name,
+            segment: topSegment,
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
       }
       content = await provider.getFileContent(requestedPath);
     } else {
       const token = await getGitHubToken(userId);
       if (!token) {
-        return { success: false, error: "GitHub OAuth token not found.", code: "TOKEN_MISSING" };
+        return {
+          success: false,
+          error: "GitHub OAuth token not found.",
+          code: "TOKEN_MISSING",
+        };
       }
       const octokit = createUserOctokit(token);
       content = await getCachedUserRawContent(
@@ -806,22 +926,30 @@ export async function fetchFileContent(input: {
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "";
     if (msg === "PATH_NOT_FOUND" || msg === "LOCAL_DISABLED") {
-      return { success: false, error: sanitizeError(error, "PATH_STALE"), code: "PATH_STALE" };
+      return {
+        success: false,
+        error: sanitizeError(error, "PATH_STALE"),
+        code: "PATH_STALE",
+      };
     }
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "status" in error
-    ) {
+    if (typeof error === "object" && error !== null && "status" in error) {
       const status = (error as { status: number }).status;
       if (status === 403) {
-        return { success: false, error: "GitHub rate limit reached.", code: "RATE_LIMITED" };
+        return {
+          success: false,
+          error: "GitHub rate limit reached.",
+          code: "RATE_LIMITED",
+        };
       }
       if (status === 404) {
         return { success: false, error: "File not found.", code: "NOT_FOUND" };
       }
     }
-    return { success: false, error: sanitizeError(error, "GITHUB_ERROR"), code: "GITHUB_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(error, "GITHUB_ERROR"),
+      code: "GITHUB_ERROR",
+    };
   }
 }
 
@@ -851,7 +979,9 @@ const importLocalFolderSchema = z.object({
     .max(4096)
     .trim()
     .refine((p) => !p.includes("\0"), { message: "Invalid path" }) // F12: null bytes
-    .refine((p) => !/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(p), { message: "Invalid path" }), // F33
+    .refine((p) => !/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(p), {
+      message: "Invalid path",
+    }), // F33
   displayName: z.string().min(1).max(255).trim().optional(),
   installOptions: z
     .object({
@@ -860,7 +990,11 @@ const importLocalFolderSchema = z.object({
       userName: z.string().max(100).optional(),
       communicationLanguage: z.string().max(50).optional(),
       documentOutputLanguage: z.string().max(50).optional(),
-      outputFolder: z.string().max(100).regex(/^[a-z0-9_.-]+$/i).optional(),
+      outputFolder: z
+        .string()
+        .max(100)
+        .regex(/^[a-z0-9_.-]+$/i)
+        .optional(),
       channel: z.enum(["stable", "next"]).optional(),
       shims: z.boolean().optional(),
     })
@@ -892,7 +1026,11 @@ export async function importLocalFolder(input: {
 > {
   // Guard: feature flag
   if (process.env.ENABLE_LOCAL_FS !== "true") {
-    return { success: false, error: sanitizeError(null, "LOCAL_DISABLED"), code: "LOCAL_DISABLED" };
+    return {
+      success: false,
+      error: sanitizeError(null, "LOCAL_DISABLED"),
+      code: "LOCAL_DISABLED",
+    };
   }
 
   const parsed = importLocalFolderSchema.safeParse(input);
@@ -916,24 +1054,18 @@ export async function importLocalFolder(input: {
   try {
     // F2: Delegate all FS operations to LocalProvider with cross-platform path resolution
     const resolvedPath = resolveLocalPath(parsed.data.localPath);
-    // Ensure the folder exists on disk (creates directory for new projects)
-    await fs.mkdir(resolvedPath, { recursive: true });
-
     const provider = new LocalProvider(resolvedPath);
     await provider.validateRoot();
 
-    let providerTree = await provider.getTree();
+    const providerTree = await provider.getTree();
 
     // Check for _bmad or _bmad-output in rootDirectories
-    const hasBmad = providerTree.rootDirectories.some(
-      (d) => d === "_bmad" || d === "_bmad-output"
-    );
-    if (!hasBmad) {
-      // Automatically install BMAD Core + modules & tools
-      await runBmadInstaller(resolvedPath, parsed.data.installOptions);
-      providerTree = await provider.getTree();
-    }
-
+    const inspection = await discoverBmad(resolvedPath);
+    const hasBmad =
+      inspection.skills.length > 0 ||
+      providerTree.rootDirectories.some(
+        (d) => d === "_bmad" || d === "_bmad-output",
+      );
     // F7/F19/F45: URL-safe name with collision-resistant hash
     const rawBasename = getCrossPlatformBasename(parsed.data.localPath);
     const sanitizedBasename = sanitizeBasename(rawBasename);
@@ -985,12 +1117,43 @@ export async function importLocalFolder(input: {
       select: { id: true, owner: true, name: true, displayName: true },
     });
 
-    if(!hasBmad){const runtime=await prisma.bmadProjectRuntime.upsert({where:{repoId:repo.id},create:{repoId:repo.id},update:{}});await prisma.bmadOperation.create({data:{runtimeId:runtime.id,kind:"install",status:"draft",createdById:userId,payload:JSON.parse(JSON.stringify(parsed.data.installOptions??{})),preview:{summary:"Install BMad in this project",writes:["_bmad/",".agents/skills/"],options:JSON.parse(JSON.stringify(parsed.data.installOptions??{}))}}});}
+    if (!hasBmad) {
+      const runtime = await prisma.bmadProjectRuntime.upsert({
+        where: { repoId: repo.id },
+        create: { repoId: repo.id },
+        update: {},
+      });
+      await prisma.bmadOperation.create({
+        data: {
+          runtimeId: runtime.id,
+          kind: "install",
+          status: "draft",
+          createdById: userId,
+          payload: JSON.parse(JSON.stringify(parsed.data.installOptions ?? {})),
+          preview: {
+            version: 2,
+            fileChanges: await operationFilePreview(
+              resolvedPath,
+              "install",
+              JSON.parse(JSON.stringify(parsed.data.installOptions ?? {})),
+            ),
+            summary: "Install stable BMad v6.12.0 in this project",
+            writes: ["_bmad/", ".agents/skills/"],
+            options: JSON.parse(
+              JSON.stringify(parsed.data.installOptions ?? {}),
+            ),
+          },
+        },
+      });
+    }
     // Automatically initialize runtime and discover installed skills & agents
     try {
       await syncProjectBmadRuntime(repo.id, resolvedPath);
     } catch (syncError) {
-      console.warn("[importLocalFolder] Initial BMad runtime sync failed:", syncError);
+      console.warn(
+        "[importLocalFolder] Initial BMad runtime sync failed:",
+        syncError,
+      );
     }
 
     revalidatePath("/(dashboard)");
@@ -1008,12 +1171,24 @@ export async function importLocalFolder(input: {
     }
     const msg = error instanceof Error ? error.message : "";
     if (msg === "PATH_NOT_FOUND") {
-      return { success: false, error: sanitizeError(error, "PATH_NOT_FOUND"), code: "PATH_NOT_FOUND" };
+      return {
+        success: false,
+        error: sanitizeError(error, "PATH_NOT_FOUND"),
+        code: "PATH_NOT_FOUND",
+      };
     }
     if (msg === "LOCAL_DISABLED") {
-      return { success: false, error: sanitizeError(error, "LOCAL_DISABLED"), code: "LOCAL_DISABLED" };
+      return {
+        success: false,
+        error: sanitizeError(error, "LOCAL_DISABLED"),
+        code: "LOCAL_DISABLED",
+      };
     }
-    return { success: false, error: sanitizeError(error, "FS_ERROR"), code: "FS_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(error, "FS_ERROR"),
+      code: "FS_ERROR",
+    };
   }
 }
 
@@ -1024,7 +1199,11 @@ export async function getAvailableLocalProjects(): Promise<
   ActionResult<AvailableLocalProject[]>
 > {
   if (process.env.ENABLE_LOCAL_FS !== "true") {
-    return { success: false, error: sanitizeError(null, "LOCAL_DISABLED"), code: "LOCAL_DISABLED" };
+    return {
+      success: false,
+      error: sanitizeError(null, "LOCAL_DISABLED"),
+      code: "LOCAL_DISABLED",
+    };
   }
 
   const authResult = await requireAuthenticated();
@@ -1034,7 +1213,11 @@ export async function getAvailableLocalProjects(): Promise<
     const projects = await scanWorkspaceProjects();
     return { success: true, data: projects };
   } catch (error) {
-    return { success: false, error: sanitizeError(error, "FS_ERROR"), code: "FS_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(error, "FS_ERROR"),
+      code: "FS_ERROR",
+    };
   }
 }
 
@@ -1054,7 +1237,9 @@ export async function listRepoBranches(input: {
   if (!authResult.success) return authResult;
 
   const { octokit, userId } = authResult.data;
-  const parsed = z.object({ owner: z.string(), name: z.string() }).safeParse(input);
+  const parsed = z
+    .object({ owner: z.string(), name: z.string() })
+    .safeParse(input);
   if (!parsed.success) {
     return { success: false, error: "Invalid input", code: "VALIDATION" };
   }
@@ -1072,17 +1257,26 @@ export async function listRepoBranches(input: {
   }
   // F21: Local repos don't have branches
   if (repoConfig.sourceType === "local") {
-    return { success: false, error: "Branch management is not available for local projects", code: "NOT_APPLICABLE" };
+    return {
+      success: false,
+      error: "Branch management is not available for local projects",
+      code: "NOT_APPLICABLE",
+    };
   }
 
   try {
-    const branches = await octokit.paginate(
-      octokit.rest.repos.listBranches,
-      { owner: parsed.data.owner, repo: parsed.data.name, per_page: 100 },
-    );
+    const branches = await octokit.paginate(octokit.rest.repos.listBranches, {
+      owner: parsed.data.owner,
+      repo: parsed.data.name,
+      per_page: 100,
+    });
     return { success: true, data: branches.map((b) => b.name) };
   } catch (error: unknown) {
-    return { success: false, error: sanitizeError(error, "GITHUB_ERROR"), code: "GITHUB_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(error, "GITHUB_ERROR"),
+      code: "GITHUB_ERROR",
+    };
   }
 }
 
@@ -1115,7 +1309,11 @@ export async function updateRepoBranch(input: {
     return { success: false, error: "Project not found", code: "NOT_FOUND" };
   }
   if (repoConfig.sourceType === "local") {
-    return { success: false, error: "Branch management is not available for local projects", code: "NOT_APPLICABLE" };
+    return {
+      success: false,
+      error: "Branch management is not available for local projects",
+      code: "NOT_APPLICABLE",
+    };
   }
 
   try {
@@ -1129,6 +1327,51 @@ export async function updateRepoBranch(input: {
 
     return { success: true, data: { branch: parsed.data.branch } };
   } catch (error: unknown) {
-    return { success: false, error: sanitizeError(error, "DB_ERROR"), code: "DB_ERROR" };
+    return {
+      success: false,
+      error: sanitizeError(error, "DB_ERROR"),
+      code: "DB_ERROR",
+    };
+  }
+}
+
+export async function inspectLocalFolder(input: { localPath: string }) {
+  const v = z
+    .object({ localPath: z.string().min(1).max(2000) })
+    .safeParse(input);
+  if (!v.success)
+    return {
+      success: false as const,
+      error: "Choose an existing project folder",
+    };
+  const session = await getAuthenticatedSession();
+  if (!session) return { success: false as const, error: "Sign in required" };
+  try {
+    const root = resolveLocalPath(v.data.localPath);
+    const provider = new LocalProvider(root);
+    await provider.validateRoot();
+    const found = await discoverBmad(root);
+    const repos = await prisma.repo.findMany({
+      where: { userId: session.userId, sourceType: "local" },
+      select: { localPath: true, owner: true, name: true },
+    });
+    const norm = (p: string) =>
+      p.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
+    const imported = repos.find(
+      (p) => p.localPath && norm(resolveLocalPath(p.localPath)) === norm(root),
+    );
+    return {
+      success: true as const,
+      data: {
+        hasBmad:
+          found.skills.length > 0 || found.profile.generation !== "missing",
+        profile: found.profile,
+        importedProject: imported
+          ? { owner: imported.owner, name: imported.name }
+          : null,
+      },
+    };
+  } catch (e) {
+    return { success: false as const, error: sanitizeError(e, "FS_ERROR") };
   }
 }

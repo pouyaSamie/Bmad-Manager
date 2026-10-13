@@ -1,4 +1,11 @@
 "use server";
+import { readCustomization } from "@/lib/project-customization";
+import { behaviorSchema } from "@/lib/agent-behavior";
+import {
+  operationFilePreview,
+  assertFileSnapshot,
+  type FileChange,
+} from "@/lib/operation-files";
 
 import { revalidatePath } from "next/cache";
 import fs from "node:fs/promises";
@@ -13,6 +20,7 @@ import {
   safeChild,
   validCustomPath,
   validSkillSlug,
+  discoverBmad,
 } from "@/lib/bmad-control";
 import { validateGraph } from "@/lib/workflow-graph";
 import type { ActionResult } from "@/lib/types";
@@ -135,11 +143,22 @@ export async function getBmadControl(
         take: 20,
       }),
     ]);
-    const safeAgents = agents.map(({ encryptedGatewayKey, ...agent }) => ({
-      ...agent,
-      gatewayConfigured: !!(agent.gatewayBaseUrl && agent.gatewayModel),
-      gatewayKeyConfigured: !!encryptedGatewayKey,
-    }));
+    const found = await discoverBmad(result.repo.localPath!);
+    const safeAgents = await Promise.all(
+      agents.map(async ({ encryptedGatewayKey, ...agent }) => ({
+        ...agent,
+        gatewayConfigured: !!(agent.gatewayBaseUrl && agent.gatewayModel),
+        gatewayKeyConfigured: !!encryptedGatewayKey,
+        customization: await readCustomization(
+          result.repo.localPath!,
+          agent.skillName ?? agent.slug,
+          skills.find((s) => s.name === agent.skillName)?.customizeSchema ??
+            null,
+          null,
+          agent.slug,
+        ),
+      })),
+    );
     return {
       success: true,
       data: {
@@ -150,6 +169,10 @@ export async function getBmadControl(
           gatewayConfigured: !!runtime.encryptedGatewayKey,
         },
         agents: safeAgents,
+        installation: found.profile,
+        workerOnline: !!(await prisma.bmadWorkerPresence.findFirst({
+          where: { heartbeatAt: { gt: new Date(Date.now() - 45000) } },
+        })),
         skills,
         operations,
         conversations,
@@ -321,7 +344,7 @@ function preview(kind: string, payload: Record<string, unknown>) {
       ? payload.modules.join(",")
       : "bmm";
     return {
-      command: `npx bmad-method install --yes --directory <projectRoot> --modules ${modules} --tools ${tools}`,
+      command: `npx bmad-method@6.12.0 install --yes --action ${kind === "update" ? "update" : "install"} --directory <projectRoot> --modules ${modules} --tools ${tools}`,
       writes: ["_bmad/", ".agents/skills/"],
     };
   }
@@ -497,10 +520,20 @@ export async function draftBmadOperation(
         error: "Attached skill is unavailable",
         code: "VALIDATION",
       };
+    if (
+      payload.behaviorPatch &&
+      !behaviorSchema.safeParse(payload.behaviorPatch).success
+    )
+      return {
+        success: false,
+        error: "Invalid behavior fields",
+        code: "VALIDATION",
+      };
     for (const field of ["name", "title", "icon", "description", "persona"])
       if (
-        typeof payload[field] !== "string" ||
-        String(payload[field]).length > 8000
+        payload[field] !== undefined &&
+        (typeof payload[field] !== "string" ||
+          String(payload[field]).length > 8000)
       )
         return {
           success: false,
@@ -510,12 +543,46 @@ export async function draftBmadOperation(
   }
   try {
     const runtime = await runtimeFor(result.repo.id);
+    if (parsed.data.kind === "update") {
+      const found = await discoverBmad(result.repo.localPath!);
+      if (!found.profile.canUpdate)
+        return {
+          success: false,
+          error: found.profile.reason,
+          code: "UNSUPPORTED_INSTALLATION",
+        };
+      payload = {
+        ...payload,
+        tools: found.profile.tools,
+        modules: found.profile.modules,
+        profile: found.profile,
+        ...{
+          userName: found.profile.settings.user_name,
+          communicationLanguage: found.profile.settings.communication_language,
+          documentOutputLanguage:
+            found.profile.settings.document_output_language,
+          outputFolder: found.profile.settings.output_folder?.replace(
+            /^\{project-root\}[/\\]/,
+            "",
+          ),
+        },
+      };
+    }
+    const fileChanges = await operationFilePreview(
+      result.repo.localPath!,
+      parsed.data.kind,
+      payload,
+    );
     const operation = await prisma.bmadOperation.create({
       data: {
         runtimeId: runtime.id,
         kind: parsed.data.kind,
         payload: payload as Prisma.InputJsonValue,
-        preview: preview(parsed.data.kind, payload) as Prisma.InputJsonValue,
+        preview: {
+          ...preview(parsed.data.kind, payload),
+          version: 2,
+          fileChanges,
+        } as unknown as Prisma.InputJsonValue,
         createdById: result.session.userId,
       },
     });
@@ -598,6 +665,33 @@ export async function approveBmadOperation(input: {
   const result = await ownedLocalProject(parsed.data.owner, parsed.data.name);
   if (result.error || !result.repo || !result.session) return result.error!;
   const runtime = await runtimeFor(result.repo.id);
+  const candidate = await prisma.bmadOperation.findFirst({
+    where: {
+      id: parsed.data.operationId,
+      runtimeId: runtime.id,
+      status: "draft",
+    },
+  });
+  const changes = candidate?.preview as {
+    version?: number;
+    fileChanges?: FileChange[];
+  } | null;
+  if (changes?.version !== 2)
+    return {
+      success: false,
+      error: "Create a new reviewed draft for this legacy operation",
+      code: "LEGACY_DRAFT",
+    };
+  try {
+    await assertFileSnapshot(result.repo.localPath!, changes.fileChanges ?? []);
+  } catch {
+    return {
+      success: false,
+      error:
+        "Files changed since this draft. Create a new draft before approval.",
+      code: "STALE_DRAFT",
+    };
+  }
   const operation = await prisma.bmadOperation.updateMany({
     where: {
       id: parsed.data.operationId,
@@ -643,5 +737,110 @@ export async function discardBmadOperation(input: {
     return { success: true, data: { discarded: true } };
   } catch (e) {
     return { success: false, error: sanitizeError(e, "DB_ERROR") };
+  }
+}
+
+export async function getConversationMessages(input: {
+  owner: string;
+  name: string;
+  agentId: string;
+  conversationId: string;
+  before?: string;
+}) {
+  const v = projectSchema
+    .extend({
+      agentId: z.string().min(1),
+      conversationId: z.string().min(1),
+      before: z.string().min(1).optional(),
+    })
+    .safeParse(input);
+  if (!v.success)
+    return { success: false as const, error: "Invalid conversation" };
+  const owned = await ownedLocalProject(v.data.owner, v.data.name);
+  if (owned.error || !owned.repo) return owned.error!;
+  try {
+    const conversation = await prisma.bmadConversation.findFirst({
+      where: {
+        id: v.data.conversationId,
+        agentId: v.data.agentId,
+        runtime: { repoId: owned.repo.id },
+      },
+    });
+    if (!conversation)
+      return {
+        success: false as const,
+        error: "Conversation not found for this agent",
+      };
+    if (
+      v.data.before &&
+      !(await prisma.bmadMessage.findFirst({
+        where: { id: v.data.before, conversationId: conversation.id },
+      }))
+    )
+      return { success: false as const, error: "Invalid conversation page" };
+    const rows = await prisma.bmadMessage.findMany({
+      where: {
+        conversationId: conversation.id,
+      },
+      ...(v.data.before ? { cursor: { id: v.data.before }, skip: 1 } : {}),
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 51,
+    });
+    const hasMore = rows.length > 50;
+    const messages = rows.slice(0, 50).reverse();
+    return {
+      success: true as const,
+      data: {
+        messages,
+        nextBefore: hasMore ? messages[0].id : null,
+      },
+    };
+  } catch (e) {
+    return { success: false as const, error: sanitizeError(e, "DB_ERROR") };
+  }
+}
+
+export async function releaseAbandonedOperation(input: {
+  owner: string;
+  name: string;
+  operationId: string;
+  confirmedStopped: boolean;
+}) {
+  const v = projectSchema
+    .extend({
+      operationId: z.string().min(1),
+      confirmedStopped: z.literal(true),
+    })
+    .safeParse(input);
+  if (!v.success)
+    return {
+      success: false as const,
+      error:
+        "Confirm the old worker is stopped and partial files have been checked",
+    };
+  const owned = await ownedLocalProject(v.data.owner, v.data.name);
+  if (owned.error || !owned.repo) return owned.error!;
+  try {
+    const op = await prisma.bmadOperation.findFirst({
+      where: {
+        id: v.data.operationId,
+        status: "failed",
+        runtime: { repoId: owned.repo.id },
+      },
+    });
+    if (!op)
+      return { success: false as const, error: "Failed operation not found" };
+    const result = await prisma.bmadWorkerLease.deleteMany({
+      where: { operationId: op.id, expiresAt: { lt: new Date() } },
+    });
+    if (!result.count)
+      return {
+        success: false as const,
+        error: "The lock is active or already released",
+      };
+    revalidatePath("/repo/" + v.data.owner + "/" + v.data.name + "/settings");
+    return { success: true as const, data: { released: true } };
+  } catch (e) {
+    return { success: false as const, error: sanitizeError(e, "DB_ERROR") };
   }
 }

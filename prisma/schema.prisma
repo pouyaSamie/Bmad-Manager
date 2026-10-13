@@ -207,6 +207,7 @@ model BmadConnection {
   models       Json?
   status       String @default("unverified")
   checkedAt    DateTime?
+  evidence     Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   projects     BmadProjectRuntime[]
@@ -236,4 +237,19 @@ model BmadOperation {
 
   @@index([runtimeId, status, createdAt])
   @@map("bmad_operations")
+}
+
+model BmadWorkerLease {
+ runtimeId String @id
+ operationId String @unique
+ workerId String
+ expiresAt DateTime
+ heartbeatAt DateTime
+ @@map("bmad_worker_leases")
+}
+model BmadWorkerPresence {
+ id String @id
+ heartbeatAt DateTime
+ capabilities Json?
+ @@map("bmad_worker_presence")
 }

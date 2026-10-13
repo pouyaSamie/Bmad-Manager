@@ -1,10 +1,17 @@
+import {
+  planAgentFiles,
+  assertFileSnapshot,
+  workflowText,
+  type FileChange,
+} from "../src/lib/operation-files";
 import "dotenv/config";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { parse, stringify } from "smol-toml";
+import { parse } from "../src/lib/toml";
+import { stringify } from "smol-toml";
 import { validateGraph } from "../src/lib/workflow-graph";
 import { syncProjectBmadRuntime } from "../src/lib/bmad-control";
 import { prisma } from "../src/lib/db/client";
@@ -26,38 +33,14 @@ export async function writeAgentOverride(
   root: string,
   payload: Record<string, unknown>,
 ) {
-  const slug = String(payload.slug ?? ""),
-    skill = String(payload.skillName ?? "");
-  if (!validSkillSlug(slug) || !validSkillSlug(skill))
-    throw new Error("Invalid customization");
-  const suffix = payload.scope === "personal" ? ".user" : "";
-  const target = safeChild(root, "_bmad/custom/config" + suffix + ".toml");
-  const current = await fs.readFile(target, "utf8").catch(() => "");
-  const doc = current.trim() ? parse(current) : {};
-  const agents = (doc.agents ?? {}) as Record<
-    string,
-    import("smol-toml").TomlValue
-  >;
-  doc.agents = agents;
-  agents[slug] = {
-    ...((agents[slug] as object) ?? {}),
-    name: String(payload.name),
-    title: String(payload.title),
-    icon: String(payload.icon),
-    description: String(payload.description),
-    skill,
-  };
-  const behavior = safeChild(root, "_bmad/custom/" + skill + suffix + ".toml");
-  const previous = await fs.readFile(behavior, "utf8").catch(() => "");
-  const override = previous.trim() ? parse(previous) : {};
-  override.agent = {
-    ...((override.agent as object) ?? {}),
-    identity: String(payload.persona ?? ""),
-  };
+  const changes = await planAgentFiles(root, payload);
+  const skill = String(payload.skillName),
+    resolver = safeChild(root, "_bmad/scripts/resolve_customization.py");
   const locations = [
     ".agents/skills",
     ".agent/skills",
     ".claude/skills",
+    ".cursor/skills",
     ".cline/skills",
     ".bob/skills",
     ".adal/skills",
@@ -65,39 +48,29 @@ export async function writeAgentOverride(
   let skillDirectory: string | undefined;
   for (const location of locations) {
     const dir = safeChild(root, location + "/" + skill);
-    const schema = await fs
-      .readFile(
-        safeChild(root, location + "/" + skill + "/customize.toml"),
-        "utf8",
-      )
-      .catch(() => null);
-    if (schema) {
-      const native = parse(schema).agent as Record<string, unknown> | undefined;
-      if (native && !("identity" in native))
-        throw new Error("This skill does not expose identity customization");
+    if (
+      await fs
+        .stat(dir)
+        .then((s) => s.isDirectory())
+        .catch(() => false)
+    ) {
       skillDirectory = dir;
       break;
     }
   }
-  const ignore = safeChild(root, ".gitignore");
-  const priorIgnore = await fs.readFile(ignore, "utf8").catch(() => null);
   try {
-    await atomicWrite(behavior, stringify(override));
-    await atomicWrite(target, stringify(doc));
-    if (payload.scope === "personal") {
-      const ignore = safeChild(root, ".gitignore");
-      const text = await fs.readFile(ignore, "utf8").catch(() => "");
-      if (!text.split(/\r?\n/).includes("*.user.toml"))
-        await atomicWrite(ignore, text.trimEnd() + "\n*.user.toml\n");
+    for (const change of changes) {
+      const target = safeChild(root, change.path);
+      if (change.after === null) await fs.unlink(target).catch(() => {});
+      else await atomicWrite(target, change.after);
     }
-    const resolver = safeChild(root, "_bmad/scripts/resolve_customization.py");
     if (
       skillDirectory &&
       (await fs
         .stat(resolver)
         .then(() => true)
         .catch(() => false))
-    ) {
+    )
       await new Promise<void>((resolve, reject) => {
         const child = spawn(
           "uv",
@@ -110,9 +83,9 @@ export async function writeAgentOverride(
         }, 30000);
         child.stdout.resume();
         child.stderr.resume();
-        child.on("error", (error) => {
+        child.on("error", (e) => {
           clearTimeout(timer);
-          reject(error);
+          reject(e);
         });
         child.on("close", (code) => {
           clearTimeout(timer);
@@ -120,15 +93,11 @@ export async function writeAgentOverride(
           else reject(new Error("Customization resolver rejected override"));
         });
       });
-    }
   } catch (error) {
-    for (const [file, original] of [
-      [behavior, previous || null],
-      [target, current || null],
-      [ignore, priorIgnore],
-    ] as const) {
-      if (original === null) await fs.unlink(file).catch(() => {});
-      else await atomicWrite(file, original);
+    for (const change of changes) {
+      const target = safeChild(root, change.path);
+      if (change.before === null) await fs.unlink(target).catch(() => {});
+      else await atomicWrite(target, change.before);
     }
     throw error;
   }
@@ -141,6 +110,9 @@ export async function execute(
   const root = operation.runtime.repo.localPath;
   if (!root) throw new Error("Operation project is not a local folder");
   const payload = operation.payload as Record<string, unknown>;
+  const snapshot = (operation.preview as { fileChanges?: FileChange[] } | null)
+    ?.fileChanges;
+  if (snapshot) await assertFileSnapshot(root, snapshot);
   if (operation.kind === "uninstall") {
     for (const relative of ["_bmad", "_bmad-output", ".agents/skills"]) {
       const target = safeChild(root, relative);
@@ -155,7 +127,20 @@ export async function execute(
     const modules = Array.isArray(payload.modules)
       ? payload.modules.map(String)
       : ["bmm"];
+    const { found } = await syncProjectBmadRuntime(
+      operation.runtime.repoId,
+      root,
+    );
+    if (operation.kind === "update" && !found.profile.canUpdate)
+      throw new Error(found.profile.reason);
+    if (found.profile.generation === "v7")
+      throw new Error("Use native bmad setup for this installation");
+    if (operation.kind === "install" && found.profile.generation !== "missing")
+      throw new Error(
+        "BMad appeared after import. Inspect and create an update draft instead.",
+      );
     return runBmadInstaller(root, {
+      action: operation.kind === "update" ? "update" : "install",
       tools,
       modules,
       userName:
@@ -172,8 +157,13 @@ export async function execute(
         typeof payload.outputFolder === "string"
           ? payload.outputFolder
           : undefined,
-      channel: payload.channel === "next" ? "next" : "stable",
-      shims: Boolean(payload.shims),
+      channel:
+        operation.kind === "update"
+          ? undefined
+          : payload.channel === "next"
+            ? "next"
+            : "stable",
+      shims: operation.kind === "update" ? undefined : Boolean(payload.shims),
     });
   }
   if (operation.kind === "set_workflow") {
@@ -185,17 +175,7 @@ export async function execute(
       throw new Error("Unknown workflow agent");
     await atomicWrite(
       safeChild(root, "_bmad/custom/workflow.toml"),
-      "# Bmad Manager design configuration. Does not execute BMad workflows.\n" +
-        stringify({
-          manager: { version: 2 },
-          nodes: graph.nodes.map((n) => ({
-            id: n.id,
-            agent: n.agentSlug,
-            x: n.position.x,
-            y: n.position.y,
-          })),
-          edges: graph.edges,
-        }),
+      workflowText(graph),
     );
     await prisma.bmadProjectRuntime.update({
       where: { id: operation.runtime.id },
@@ -231,7 +211,7 @@ export async function execute(
     const skillDir = safeChild(root, `.agents/skills/${slug}`);
     if (
       await fs
-        .stat(safeChild(root, `.agents/skills/${slug}/SKILL.md`))
+        .stat(skillDir)
         .then(() => true)
         .catch(() => false)
     )
@@ -317,9 +297,17 @@ async function rescan(runtimeId: string, root: string) {
   await syncProjectBmadRuntime(runtime.repoId, root);
 }
 async function nextOperation() {
+  const held = await prisma.bmadWorkerLease.findMany({
+    select: { operationId: true },
+  });
+  const locked = await prisma.bmadOperation.findMany({
+    where: { id: { in: held.map((l) => l.operationId) } },
+    select: { runtimeId: true },
+  });
   return prisma.bmadOperation.findFirst({
     where: {
       status: "queued",
+      runtimeId: { notIn: locked.map((o) => o.runtimeId) },
       ...(process.argv.includes("--operation-id")
         ? { id: process.argv[process.argv.indexOf("--operation-id") + 1] }
         : {}),
@@ -329,20 +317,146 @@ async function nextOperation() {
   });
 }
 
-async function run() {
+const workerId = crypto.randomUUID();
+export async function recoverExpiredOperations() {
+  const stale = await prisma.bmadWorkerLease.findMany({
+    where: {
+      expiresAt: { lt: new Date() },
+      ...(process.argv.includes("--operation-id")
+        ? {
+            operationId:
+              process.argv[process.argv.indexOf("--operation-id") + 1],
+          }
+        : {}),
+    },
+  });
+  for (const lease of stale)
+    await prisma.$transaction(async (tx) => {
+      const stillExpired = await tx.bmadWorkerLease.updateMany({
+        where: { runtimeId: lease.runtimeId, expiresAt: { lt: new Date() } },
+        data: { heartbeatAt: lease.heartbeatAt },
+      });
+      if (stillExpired.count)
+        await tx.bmadOperation.updateMany({
+          where: { id: lease.operationId, status: "running" },
+          data: {
+            status: "failed",
+            completedAt: new Date(),
+            error:
+              "Worker heartbeat expired. Stop the previous worker and any installer child process, then inspect partial files before releasing the project lock. Automatic retry is disabled.",
+          },
+        });
+    });
+}
+
+let prerequisiteCache: Record<string, string> | undefined;
+async function prerequisites() {
+  if (prerequisiteCache) return prerequisiteCache;
+  const check = async (bin: string) =>
+    new Promise<string>((resolve) => {
+      const child = spawn(bin, ["--version"], {
+        shell: false,
+        windowsHide: true,
+        stdio: "pipe",
+      });
+      let out = "";
+      const timer = setTimeout(() => {
+        child.kill();
+        resolve("unavailable");
+      }, 3000);
+      child.stdout.on("data", (c) => (out += c));
+      child.stderr.resume();
+      child.on("error", () => {
+        clearTimeout(timer);
+        resolve("unavailable");
+      });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        resolve(
+          code === 0
+            ? (out.match(/\d+\.\d+(?:\.\d+)?/)?.[0] ?? "available")
+            : "unavailable",
+        );
+      });
+    });
+  prerequisiteCache = {
+    node: process.version,
+    uv: await check("uv"),
+    git: await check("git"),
+  };
+  return prerequisiteCache;
+}
+async function presence() {
+  await prisma.bmadWorkerPresence.upsert({
+    where: { id: workerId },
+    create: {
+      id: workerId,
+      heartbeatAt: new Date(),
+      capabilities: await prerequisites(),
+    },
+    update: { heartbeatAt: new Date() },
+  });
+}
+export async function run() {
+  await presence();
+  await recoverExpiredOperations();
   const operation = await nextOperation();
   if (!operation) return false;
-  const claimed = await prisma.bmadOperation.updateMany({
-    where: { id: operation.id, status: "queued" },
-    data: { status: "running", startedAt: new Date() },
+  const physicalRoot = await fs
+    .realpath(
+      path.dirname(safeChild(operation.runtime.repo.localPath!, ".bmad-lock")),
+    )
+    .catch(() => operation.runtime.repo.localPath!);
+  const lockKey = crypto
+    .createHash("sha256")
+    .update(
+      process.platform === "win32" ? physicalRoot.toLowerCase() : physicalRoot,
+    )
+    .digest("hex");
+  const now = new Date();
+  const claimed = await prisma.$transaction(async (tx) => {
+    const lease = await tx.bmadWorkerLease.createMany({
+      data: {
+        runtimeId: lockKey,
+        operationId: operation.id,
+        workerId,
+        heartbeatAt: now,
+        expiresAt: new Date(now.getTime() + 60000),
+      },
+      skipDuplicates: true,
+    });
+    if (!lease.count) return false;
+    const result = await tx.bmadOperation.updateMany({
+      where: { id: operation.id, status: "queued" },
+      data: { status: "running", startedAt: now },
+    });
+    if (!result.count)
+      await tx.bmadWorkerLease.deleteMany({
+        where: { runtimeId: lockKey, workerId },
+      });
+    return !!result.count;
   });
-  if (!claimed.count) return false;
+  if (!claimed) return false;
+  const heartbeat = setInterval(() => {
+    void Promise.all([
+      presence(),
+      prisma.bmadWorkerLease.updateMany({
+        where: { runtimeId: lockKey, workerId, expiresAt: { gt: new Date() } },
+        data: {
+          heartbeatAt: new Date(),
+          expiresAt: new Date(Date.now() + 60000),
+        },
+      }),
+    ]).catch(() =>
+      console.error("Worker heartbeat failed; inspect worker database access."),
+    );
+  }, 10000);
   try {
     const output = await execute(operation);
     if (operation.kind !== "uninstall")
       await rescan(operation.runtime.id, operation.runtime.repo.localPath!);
-    await prisma.bmadOperation.update({
-      where: { id: operation.id },
+    await prisma.bmadOperation.updateMany({
+      where: { id: operation.id, status: "running" },
       data: {
         status: "succeeded",
         output: redact(String(output)),
@@ -353,30 +467,39 @@ async function run() {
       await prisma.repo.delete({ where: { id: operation.runtime.repoId } });
   } catch (error) {
     console.error(redact(String(error)));
-    await prisma.bmadOperation.update({
-      where: { id: operation.id },
+    await prisma.bmadOperation.updateMany({
+      where: { id: operation.id, status: "running" },
       data: {
         status: "failed",
-        error: "Operation failed. Check worker diagnostics and project access.",
+        error:
+          error instanceof Error && error.message.startsWith("Files changed")
+            ? "Files changed since review. Create and approve a fresh draft."
+            : "Operation failed. Inspect worker diagnostics and partial project changes before creating a new draft.",
         completedAt: new Date(),
       },
+    });
+  } finally {
+    clearInterval(heartbeat);
+    await prisma.bmadWorkerLease.deleteMany({
+      where: { runtimeId: lockKey, workerId },
     });
   }
   return true;
 }
-
 async function main() {
   if (process.argv.includes("--operation-id")) {
     await run();
     await prisma.$disconnect();
     return;
   }
-  do {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-  } while (await run());
-  setInterval(() => {
-    void run();
-  }, 3000);
+  while (true) {
+    try {
+      await run();
+    } catch (error) {
+      console.error(redact(String(error)));
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
 }
 
 if (process.argv[1] && /bmad-worker\.(ts|js)$/.test(process.argv[1]))
