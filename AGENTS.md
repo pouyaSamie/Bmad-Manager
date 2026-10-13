@@ -133,6 +133,8 @@ import { sanitizeError } from "@/lib/errors";
   - Codex uses the existing signed-in account through app-server with ephemeral read-only sessions, disabled shell/patch/MCP tools, and rejected tool/approval requests. Keep CLI launches outside the web process and project repositories.
   - AGY requires verified deny rules for file, command, MCP, and web tools; refuse tests when restrictions cannot be verified. Never use unrestricted permission flags or silently change global CLI settings. Exact rules and host setup are in `docs/workspace-upgrade.md`.
   - Model catalogs come from the actual CLI. Do not hard-code a default model or imply that a provider is authenticated/tested without evidence.
+- Optional Docker bridges use `docker/cli-bridge.Dockerfile` and Compose profiles `cli`, `codex`, and `agy`. Keep services separate from the web process, non-root, without published ports or project mounts. Persist container logins in separate named volumes; never copy host login state into images.
+- Generate runtime tokens with `pnpm cli:setup`; `.secrets/` and `.bridge-state/` are excluded from Git and image contexts. `CLI_BRIDGE_TOKEN_FILE` reads the mounted secret. Container liveness does not imply authenticated or tested model access. See `docs/cli-bridges.md`.
 - **Test Conversations:**
   - `/api/bmad/chat` checks project ownership, agent availability, connection ownership, and conversation/agent binding. Keep recent history bounded.
   - Require a provider completion marker before recording success or tested status. Keep catalog, authentication, and per-model evidence distinct. Paginate saved messages using stable, ownership-checked message cursors.

@@ -126,6 +126,10 @@ Existing installations also need `pnpm db:migrate-workspace` once. It preserves 
 
 For Codex, set a random `CLI_BRIDGE_TOKEN` of at least 32 characters and run `pnpm codex:gateway` on the signed-in host. Add that token to the Codex CLI connection. The default endpoint in Docker is `http://host.docker.internal:3006/v1`; host applications use `http://localhost:3006/v1`. AGY uses port 3005 and `pnpm agy:gateway`. Bridge networking, restrictions, and optional binary paths are explained in the [bridge guide](docs/workspace-upgrade.md).
 
+To run both CLIs entirely in Docker, use `pnpm cli:setup` and `docker compose --profile cli up -d --build codex-bridge agy-bridge`. Sign in inside each container, then choose **Docker Compose service** as the connection's bridge location. See [Docker CLI setup](docs/cli-bridges.md) for login instructions and private token storage.
+
+![Configure a CLI connection through Docker Compose](docs/screenshots/cli-connection.png)
+
 Local providers require a running endpoint; cloud providers require credentials. Save a connection, discover its models, and complete a test conversation to check your own configuration. Provider support does not imply that your connection is already authenticated or tested.
 
 ## Apply project changes safely
@@ -153,6 +157,7 @@ Repository operations follow **draft → preview → approval → queued → wor
 | `pnpm db:migrate-workspace` | Convert legacy routes and workflow data |
 | `pnpm bmad:worker` | Apply approved repository operations |
 | `pnpm codex:gateway` / `pnpm agy:gateway` | Host CLI bridges |
+| `pnpm cli:setup` | Generate private Docker bridge token files |
 
 Browser tests cover the import, configuration, conversation, workflow, and approval journeys across desktop and mobile layouts. Generated reports are stored in ignored `.qa-results/`.
 

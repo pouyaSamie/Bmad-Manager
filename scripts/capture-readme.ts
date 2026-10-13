@@ -55,7 +55,9 @@ async function main() {
     await theme("light");
     await snap("projects");
     await visit(project);
-    await page.getByRole("heading",{name:"Project setup",exact:true}).waitFor({timeout:20000});
+    await page
+      .getByRole("heading", { name: "Project setup", exact: true })
+      .waitFor({ timeout: 20000 });
     await snap("overview");
     await visit(project + "/agents");
     await page
@@ -89,6 +91,19 @@ async function main() {
     await visit("/connections");
     await theme("light");
     await snap("connections");
+    await page
+      .getByRole("button", { name: "Add connection", exact: true })
+      .click();
+    await page.getByRole("combobox", { name: "Provider", exact: true }).click();
+    await page.getByRole("option", { name: "Codex CLI", exact: true }).click();
+    await page
+      .getByRole("combobox", { name: "Bridge location", exact: true })
+      .click();
+    await page
+      .getByRole("option", { name: "Docker Compose service", exact: true })
+      .click();
+    await snap("cli-connection");
+    await page.keyboard.press("Escape");
     await visit("/diagnostics");
     await snap("diagnostics");
     await visit(project + "/docs");
@@ -130,7 +145,9 @@ async function main() {
         2,
       ) + "\n",
     );
-    console.log("Captured ten README images without saving project changes.");
+    console.log(
+      "Captured eleven README images without saving project changes.",
+    );
   } finally {
     await browser.close();
   }

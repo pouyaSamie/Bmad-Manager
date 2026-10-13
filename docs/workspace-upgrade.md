@@ -4,6 +4,8 @@ Run production schema migrations with `pnpm prisma migrate deploy`, regenerate t
 
 ## Host CLI bridges
 
+For bridges running entirely in Docker, see [Docker CLI setup](cli-bridges.md). Host bridges remain available for local development.
+
 Set a random `CLI_BRIDGE_TOKEN` of at least 32 characters in the host environment. Run `pnpm codex:gateway` or `pnpm agy:gateway` on the logged-in host. Add that token as the connection's bridge access token. The default binding is loopback; Docker users can explicitly set `CLI_BRIDGE_HOST=0.0.0.0` and firewall access to the local Docker host. Never expose a bridge to the public internet.
 
 Codex uses the signed-in account through app-server, an ephemeral thread, read-only sandbox, disabled shell/patch features, disabled configured MCP servers, and rejected approval/tool requests. `CODEX_BIN` can point to a native executable.

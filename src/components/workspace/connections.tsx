@@ -112,8 +112,8 @@ export function Connections() {
       )}
       <Alert icon={<Plug size={18} />} color="indigo">
         Reachable means the model catalog responded. Tested means a real
-        conversation completed successfully. CLI connections use your host
-        bridge and its access token.
+        conversation completed successfully. CLI connections use a host or
+        Docker bridge and its access token.
       </Alert>
       <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }}>
         {rows.map((c) => (
@@ -272,6 +272,7 @@ export function Connections() {
                   provider: p.id,
                   name: p.name,
                   baseUrl: p.baseUrl,
+                  apiKey: "",
                 });
             }}
           />
@@ -280,6 +281,42 @@ export function Connections() {
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
+          {(form.provider === "codex-cli" || form.provider === "agy") && (
+            <Select
+              label="Bridge location"
+              description="Choose where you started the CLI bridge."
+              data={[
+                { value: "docker", label: "Docker Compose service" },
+                { value: "host", label: "Host computer (Docker app)" },
+                { value: "local", label: "Same computer (development app)" },
+                { value: "custom", label: "Custom address" },
+              ]}
+              value={
+                form.baseUrl ===
+                `http://${form.provider === "agy" ? "agy" : "codex"}-bridge:${form.provider === "agy" ? 3005 : 3006}/v1`
+                  ? "docker"
+                  : form.baseUrl === preset?.baseUrl
+                    ? "host"
+                    : form.baseUrl ===
+                        `http://localhost:${form.provider === "agy" ? 3005 : 3006}/v1`
+                      ? "local"
+                      : "custom"
+              }
+              onChange={(location) => {
+                const port = form.provider === "agy" ? 3005 : 3006;
+                const service = form.provider === "agy" ? "agy" : "codex";
+                const baseUrl =
+                  location === "docker"
+                    ? `http://${service}-bridge:${port}/v1`
+                    : location === "host"
+                      ? preset!.baseUrl
+                      : location === "local"
+                        ? `http://localhost:${port}/v1`
+                        : "";
+                setForm({ ...form, baseUrl, apiKey: "" });
+              }}
+            />
+          )}
           <TextInput
             label="Endpoint"
             value={form.baseUrl}
@@ -303,9 +340,9 @@ export function Connections() {
           />
           {(form.provider === "codex-cli" || form.provider === "agy") && (
             <Text size="sm" c="dimmed">
-              Start the authenticated bridge on your host. Login and tool
-              restrictions are verified there; the web app does not launch the
-              CLI.
+              Start the authenticated bridge on your host or in Docker. Login
+              and tool restrictions are verified there; the web app does not
+              launch the CLI.
             </Text>
           )}
           <Button
