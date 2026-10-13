@@ -60,7 +60,9 @@ export function Diagnostics() {
         {data?.workers.map((w, i) => (
           <Text size="sm" key={i}>
             Last seen {new Date(w.lastSeen).toLocaleString()} ·{" "}
-            {JSON.stringify(w.capabilities)}
+            {Object.entries((w.capabilities ?? {}) as Record<string, string>)
+              .map(([tool, version]) => tool + ": " + version)
+              .join(" · ")}
           </Text>
         ))}
       </Paper>

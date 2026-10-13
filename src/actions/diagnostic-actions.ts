@@ -9,6 +9,8 @@ export async function getDiagnostics() {
     const [workers, connections, projects] = await Promise.all([
       prisma.bmadWorkerPresence.findMany({
         where: { heartbeatAt: { gt: new Date(Date.now() - 86400000) } },
+        orderBy: { heartbeatAt: "desc" },
+        take: 5,
       }),
       prisma.bmadConnection.findMany({
         where: { userId: session.userId },
