@@ -19,6 +19,7 @@ import {
 import {
   getAvailableLocalProjects,
   importLocalFolder,
+  inspectLocalFolder,
   listUserRepos,
   importRepo,
 } from "@/actions/repo-actions";
@@ -69,6 +70,32 @@ export function AddRepoDialog({
         (normalize(r.localPath) === normalize(p.path) ||
           normalize(r.localPath) === normalize(p.displayPath)),
     );
+  async function inspect(folderPath: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await inspectLocalFolder({ localPath: folderPath });
+      if (!r.success) {
+        setError(r.error);
+        return;
+      }
+      if (r.data.importedProject) {
+        setOpen(false);
+        router.push(
+          "/repo/" +
+            r.data.importedProject.owner +
+            "/" +
+            r.data.importedProject.name,
+        );
+        return;
+      }
+      setFolder(folderPath);
+      setHasBmad(r.data.hasBmad);
+      setStep(r.data.hasBmad ? 2 : 1);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function show() {
     setOpen(true);
     setStep(0);
@@ -180,8 +207,7 @@ export function AddRepoDialog({
                                     );
                                   } else {
                                     setFolder(p.path);
-                                    setHasBmad(p.hasBmad);
-                                    setStep(p.hasBmad ? 2 : 1);
+                                    void inspect(p.path);
                                   }
                                 }}
                               >
@@ -203,10 +229,8 @@ export function AddRepoDialog({
                   />
                   <Button
                     disabled={!folder.trim()}
-                    onClick={() => {
-                      setHasBmad(false);
-                      setStep(1);
-                    }}
+                    loading={busy}
+                    onClick={() => void inspect(folder)}
                   >
                     Continue
                   </Button>
@@ -249,7 +273,12 @@ export function AddRepoDialog({
             </Tabs>
           ) : step === 1 ? (
             <Stack>
-              <Text fw={600}>BMad installation preferences</Text>
+              <Text fw={600}>Stable BMad v6.12 installation preferences</Text>
+              <Text size="sm" c="dimmed">
+                For v7 preview, install through the official Skills CLI or
+                plugin marketplace and run bmad setup in your coding tool, then
+                import the installed folder.
+              </Text>
               <Checkbox.Group label="Tools / IDEs" value={options.tools}>
                 {[
                   ["codex", "Codex"],

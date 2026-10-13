@@ -1,4 +1,12 @@
 "use client";
+import { BehaviorEditor } from "./behavior-editor";
+import {
+  previewBehavior,
+  behaviorPrompt,
+  type AgentBehavior,
+} from "@/lib/agent-behavior";
+import { useUnsavedChanges } from "./use-unsaved-changes";
+
 import { useRef, useState } from "react";
 import { useMediaQuery } from "@mantine/hooks";
 import {
@@ -17,7 +25,10 @@ import {
   ScrollArea,
 } from "@mantine/core";
 import { assignConnection } from "@/actions/connection-actions";
-import { draftBmadOperation } from "@/actions/bmad-control-actions";
+import {
+  draftBmadOperation,
+  getConversationMessages,
+} from "@/actions/bmad-control-actions";
 import { sseData } from "@/lib/model-stream";
 import type { Agent, StudioData } from "./studio-types";
 import type { Connection } from "./connections";
@@ -42,9 +53,9 @@ export function AgentInspector({
   const [tab, setTab] = useState<string | null>("model"),
     [connectionId, setConnection] = useState(agent.connectionId ?? "project"),
     [model, setModel] = useState(agent.modelId ?? ""),
-    [persona, setPersona] = useState(
-      typeof agent.persona === "string" ? agent.persona : "",
-    ),
+    [patch, setPatch] = useState<AgentBehavior>({}),
+    [reset, setReset] = useState<string[]>([]),
+    [historyCursor, setHistoryCursor] = useState<string | null>(null),
     [skill, setSkill] = useState(agent.skillName ?? ""),
     [displayName, setName] = useState(agent.name),
     [title, setTitle] = useState(agent.title),
@@ -65,9 +76,35 @@ export function AgentInspector({
   const effectiveModel =
     connectionId === "project" ? data.runtime.modelId : model;
   const models = connection?.models ?? [];
+  const [savedRoute, setSavedRoute] = useState({
+    connectionId: agent.connectionId ?? "project",
+    modelId: agent.modelId ?? "",
+  });
+  const [draftedSignature, setDraftedSignature] = useState(
+    JSON.stringify({
+      displayName: agent.name,
+      title: agent.title,
+      skill: agent.skillName ?? "",
+      scope: agent.scope,
+      patch: {},
+      reset: [],
+    }),
+  );
+  const currentSignature = JSON.stringify({
+    displayName,
+    title,
+    skill,
+    scope,
+    patch,
+    reset,
+  });
   const routeEdited =
-    connectionId !== (agent.connectionId ?? "project") ||
-    (connectionId !== "project" && model !== (agent.modelId ?? ""));
+    connectionId !== savedRoute.connectionId ||
+    (connectionId !== "project" && model !== savedRoute.modelId);
+  const customization = agent.customization;
+  const preview = previewBehavior(customization, scope, patch, reset);
+  const customizationEdited = currentSignature !== draftedSignature;
+  useUnsavedChanges(routeEdited || customizationEdited);
   const pending = data.operations.some(
     (o) =>
       o.status === "draft" && JSON.stringify(o.payload).includes(agent.slug),
@@ -85,6 +122,7 @@ export function AgentInspector({
       });
       if (!r.success) setError(r.error);
       else {
+        setSavedRoute({ connectionId, modelId: model });
         setNotice("Model assignment saved. Repository files were not changed.");
         await onRefresh();
       }
@@ -104,11 +142,13 @@ export function AgentInspector({
           agentId: agent.id,
           slug: agent.slug,
           skillName: skill,
-          name: displayName,
-          title,
-          icon: agent.icon,
-          description: agent.description ?? "",
-          persona,
+          descriptor: {
+            ...(displayName !== agent.name ? { name: displayName } : {}),
+            ...(title !== agent.title ? { title } : {}),
+            ...(skill !== agent.skillName ? { skill } : {}),
+          },
+          behaviorPatch: patch,
+          behaviorReset: reset,
           scope,
         },
       });
@@ -117,18 +157,20 @@ export function AgentInspector({
         setNotice(
           "Customization drafted. Review and approve it in Project Settings.",
         );
+        setDraftedSignature(currentSignature);
         await onRefresh();
       }
     } finally {
       setBusy(false);
     }
   }
-  async function send() {
-    if (!connection || !effectiveModel || !message.trim()) return;
+  async function send(retryPrompt?: string) {
+    if (!connection || !effectiveModel || !(retryPrompt ?? message).trim())
+      return;
     setBusy(true);
     setError("");
     setMetadata("");
-    const prompt = message;
+    const prompt = retryPrompt ?? message;
     setLines((l) => [
       ...l,
       { role: "user", content: prompt },
@@ -137,7 +179,7 @@ export function AgentInspector({
     setMessage("");
     abort.current = new AbortController();
     let answer = "";
-    let terminal = "completed";
+    let terminal = "failed";
     try {
       const res = await fetch("/api/bmad/chat", {
         method: "POST",
@@ -152,7 +194,7 @@ export function AgentInspector({
           preview: {
             connectionId: connection.id,
             modelId: effectiveModel,
-            persona,
+            persona: behaviorPrompt(preview),
             skillName: skill,
           },
         }),
@@ -179,8 +221,10 @@ export function AgentInspector({
           terminal = "failed";
           setError(e.error);
         }
-        if (e.type === "completion")
+        if (e.type === "completion") {
+          terminal = "completed";
           setMetadata((m) => m + " · " + (e.latencyMs / 1000).toFixed(1) + "s");
+        }
       }
     } catch (e) {
       terminal = abort.current?.signal.aborted ? "cancelled" : "failed";
@@ -206,6 +250,11 @@ export function AgentInspector({
     <Drawer
       opened
       onClose={() => {
+        if (
+          (routeEdited || customizationEdited) &&
+          !window.confirm("Discard unsaved edits and close this inspector?")
+        )
+          return;
         abort.current?.abort();
         onClose();
       }}
@@ -275,6 +324,15 @@ export function AgentInspector({
                 </Alert>
               )}
               <Button
+                variant="subtle"
+                onClick={() => {
+                  setConnection("project");
+                  setModel("");
+                }}
+              >
+                Use project default
+              </Button>
+              <Button
                 loading={busy}
                 disabled={connectionId !== "project" && !model}
                 onClick={saveRoute}
@@ -289,21 +347,52 @@ export function AgentInspector({
           <Tabs.Panel value="persona" pt="lg">
             <Stack>
               <TextInput
-                label="Display name"
+                label="Display name (Manager roster)"
                 value={displayName}
                 onChange={(e) => setName(e.target.value)}
               />
               <TextInput
-                label="Role"
+                label="Title (Manager roster)"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
-              <Textarea
-                label="Identity and instructions"
-                minRows={10}
-                autosize
-                value={persona}
-                onChange={(e) => setPersona(e.target.value)}
+              {customization.legacy?.identity && (
+                <Alert color="orange">
+                  Legacy Manager instructions are included in this preview. To
+                  apply them through BMad’s supported customization surface,
+                  draft a conversion below.
+                  <Button
+                    mt="sm"
+                    variant="light"
+                    onClick={() =>
+                      setPatch((p) => ({
+                        ...p,
+                        identity: customization.legacy!.identity,
+                      }))
+                    }
+                  >
+                    Preview legacy persona conversion
+                  </Button>
+                </Alert>
+              )}
+              <BehaviorEditor
+                state={customization}
+                skills={data.skills.filter((s) => s.source !== "missing")}
+                scope={scope}
+                patch={patch}
+                reset={reset}
+                onChange={(key, value) => {
+                  setPatch((p) => ({ ...p, [key]: value }));
+                  setReset((r) => r.filter((k) => k !== key));
+                }}
+                onReset={(key) => {
+                  setPatch((p) => {
+                    const next = { ...p };
+                    delete next[key as keyof AgentBehavior];
+                    return next;
+                  });
+                  setReset((r) => [...new Set([...r, key])]);
+                }}
               />
               <Select
                 label="Customization scope"
@@ -315,7 +404,11 @@ export function AgentInspector({
                     label: "Personal · gitignored override",
                   },
                 ]}
-                onChange={(v) => setScope(v ?? "team")}
+                onChange={(v) => {
+                  setScope(v ?? "team");
+                  setPatch({});
+                  setReset([]);
+                }}
               />
               <Text size="sm" c="dimmed">
                 Preview these instructions in Test chat. Applying them creates a
@@ -364,12 +457,23 @@ export function AgentInspector({
                 data={data.conversations
                   .filter((c) => c.agentId === agent.id)
                   .map((c) => ({ value: c.id, label: c.title }))}
-                onChange={(v) => {
+                onChange={async (v) => {
                   setConversation(v);
-                  setLines(
-                    data.conversations.find((c) => c.id === v)?.messages ?? [],
-                  );
+                  setLines([]);
                   setMetadata("");
+                  setHistoryCursor(null);
+                  if (v) {
+                    const r = await getConversationMessages({
+                      owner,
+                      name,
+                      agentId: agent.id,
+                      conversationId: v,
+                    });
+                    if (r.success) {
+                      setLines(r.data.messages);
+                      setHistoryCursor(r.data.nextBefore);
+                    } else setError(r.error);
+                  }
                 }}
               />
               <Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>
@@ -378,6 +482,27 @@ export function AgentInspector({
                     .filter(Boolean)
                     .join(" · ")}
               </Text>
+              {historyCursor && (
+                <Button
+                  variant="subtle"
+                  onClick={async () => {
+                    if (!conversation) return;
+                    const r = await getConversationMessages({
+                      owner,
+                      name,
+                      agentId: agent.id,
+                      conversationId: conversation,
+                      before: historyCursor,
+                    });
+                    if (r.success) {
+                      setLines((l) => [...r.data.messages, ...l]);
+                      setHistoryCursor(r.data.nextBefore);
+                    } else setError(r.error);
+                  }}
+                >
+                  Load earlier messages
+                </Button>
+              )}
               <ScrollArea h={320}>
                 <Stack>
                   {lines.map((l, i) => (
@@ -418,12 +543,27 @@ export function AgentInspector({
               />
               <Group>
                 <Button
-                  onClick={send}
+                  onClick={() => void send()}
                   loading={busy}
                   disabled={!connection || !effectiveModel || !agent.available}
                 >
                   Send test message
                 </Button>
+                {!busy &&
+                  lines.at(-1)?.status &&
+                  lines.at(-1)?.status !== "completed" && (
+                    <Button
+                      variant="light"
+                      onClick={() => {
+                        const prompt = [...lines]
+                          .reverse()
+                          .find((l) => l.role === "user")?.content;
+                        if (prompt) void send(prompt);
+                      }}
+                    >
+                      Retry last message
+                    </Button>
+                  )}
                 {busy && (
                   <Button
                     variant="light"

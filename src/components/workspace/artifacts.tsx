@@ -270,6 +270,8 @@ export function Library({
 }) {
   const [search, setSearch] = useState(""),
     [category, setCategory] = useState<string | null>("documents"),
+    [initiative, setInitiative] = useState<string | null>(null),
+    [purpose, setPurpose] = useState<string | null>(null),
     [selected, setSelected] = useState(initialSelectedFile ?? ""),
     [file, setFile] = useState<ParsedBmadFile | null>(null),
     [error, setError] = useState(""),
@@ -282,15 +284,42 @@ export function Library({
     ).values(),
   ].sort((a, b) => {
     const rank = (n: FileTreeNode) =>
-      n.path.includes("planning-artifacts")
-        ? 0
-        : n.path.includes("implementation-artifacts")
-          ? 1
-          : 2;
+      n.name.startsWith(".")
+        ? 9
+        : /^(?:prd|spec|architecture|DESIGN|EXPERIENCE|ux|epics)/i.test(n.name)
+          ? 0
+          : n.path.includes("planning-artifacts")
+            ? 1
+            : n.path.includes("implementation-artifacts")
+              ? 2
+              : 3;
     return rank(a) - rank(b) || a.name.localeCompare(b.name);
   });
+  const initiativeOf = (n: FileTreeNode) => {
+    const parts = n.path.split("/");
+    const i = parts.indexOf("_bmad-output");
+    if (
+      i < 0 ||
+      parts.length < i + 3 ||
+      ["planning-artifacts", "implementation-artifacts"].includes(parts[i + 1])
+    )
+      return "General";
+    return parts[i + 1];
+  };
+  const purposeOf = (n: FileTreeNode) =>
+    /^(prd|brief|spec|epics|tickets)/i.test(n.name)
+      ? "Requirements"
+      : /^(architecture|DESIGN|EXPERIENCE|ux)/i.test(n.name)
+        ? "Design"
+        : n.path.includes("implementation-artifacts")
+          ? "Implementation"
+          : n.name.startsWith(".") || n.path.includes("_bmad/")
+            ? "Internal"
+            : "Other";
   const visible = files.filter(
     (n) =>
+      (!initiative || initiativeOf(n) === initiative) &&
+      (!purpose || purposeOf(n) === purpose) &&
       n.path.toLowerCase().includes(search.toLowerCase()) &&
       (category !== "documents" ||
         /\.(md|yaml|yml|toml|json|txt)$/i.test(n.name)) &&
@@ -344,6 +373,22 @@ export function Library({
             { value: "images", label: "Images" },
             { value: "all", label: "All artifacts" },
           ]}
+        />
+        <Select
+          aria-label="Initiative"
+          placeholder="All initiatives"
+          clearable
+          data={[...new Set(files.map(initiativeOf))]}
+          value={initiative}
+          onChange={setInitiative}
+        />
+        <Select
+          aria-label="Document purpose"
+          placeholder="All document purposes"
+          clearable
+          data={[...new Set(files.map(purposeOf))]}
+          value={purpose}
+          onChange={setPurpose}
         />
       </Group>
       <SimpleGrid

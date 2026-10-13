@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { parse } from "@/lib/toml";
 import {
   Title,
   Text,
@@ -26,6 +27,7 @@ import {
   approveBmadOperation,
   getBmadSkillContent,
   discardBmadOperation,
+  releaseAbandonedOperation,
 } from "@/actions/bmad-control-actions";
 import {
   listConnections,
@@ -62,7 +64,13 @@ export function Studio({
     [persona, setPersona] = useState(
       "Review the product from the perspective of an end user. Explain specific improvements.",
     ),
-    [scope, setScope] = useState("team");
+    [scope, setScope] = useState("team"),
+    [skillDetails, setSkillDetails] = useState<{
+      name: string;
+      description: string;
+      content: string;
+      fields: string[];
+    } | null>(null);
   const refresh = useCallback(async () => {
     const [r, c] = await Promise.all([
       getBmadControl({ owner, name }),
@@ -71,8 +79,8 @@ export function Studio({
     if (r.success) {
       const d = r.data as StudioData;
       setData(d);
-      setConn(d.runtime.connectionId);
-      setModel(d.runtime.modelId);
+      setConn((current) => current ?? d.runtime.connectionId);
+      setModel((current) => current ?? d.runtime.modelId);
     } else setError(r.error);
     if (c.success) setConnections(c.data);
     else setError(c.error);
@@ -80,6 +88,12 @@ export function Studio({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  useEffect(() => {
+    if (!data?.operations.some((o) => ["queued", "running"].includes(o.status)))
+      return;
+    const timer = setInterval(() => void refresh(), 3000);
+    return () => clearInterval(timer);
+  }, [data?.operations, refresh]);
   if (!data)
     return (
       <Stack>{error ? <Alert color="red">{error}</Alert> : <Loader />}</Stack>
@@ -139,6 +153,7 @@ export function Studio({
           data={data}
           owner={owner}
           name={name}
+          connections={connections}
           onInspect={setAgent}
           onRefresh={refresh}
         />
@@ -300,6 +315,35 @@ export function Studio({
                           </Badge>
                         </div>
                         <Button
+                          variant="subtle"
+                          disabled={s.source === "missing"}
+                          onClick={async () => {
+                            const r = await getBmadSkillContent({
+                              owner,
+                              name,
+                              skillId: s.id,
+                            });
+                            if (r.success)
+                              setSkillDetails({
+                                name: s.name,
+                                description:
+                                  s.description ??
+                                  "Read installed instructions for purpose and usage.",
+                                content: r.data.content,
+                                fields: s.customizeSchema
+                                  ? Object.keys(
+                                      (parse(s.customizeSchema).agent ??
+                                        parse(s.customizeSchema).workflow ??
+                                        {}) as object,
+                                    )
+                                  : [],
+                              });
+                            else setError(r.error);
+                          }}
+                        >
+                          View capability
+                        </Button>
+                        <Button
                           variant="light"
                           disabled={s.source === "missing"}
                           onClick={() => {
@@ -396,8 +440,9 @@ export function Studio({
               <div>
                 <Title order={3}>BMad installation</Title>
                 <Text c="dimmed" size="sm">
-                  {data.runtime.installedVersion ?? "Version not detected"} ·{" "}
-                  {data.runtime.installStatus}
+                  {data.installation.generation} ·{" "}
+                  {data.installation.version ?? "Version not detected"} ·{" "}
+                  {data.installation.method}
                 </Text>
               </div>
               <Group>
@@ -416,17 +461,13 @@ export function Studio({
                 </Button>
                 <Button
                   variant="light"
+                  disabled={!data.installation.canUpdate}
                   onClick={async () => {
                     const r = await draftBmadOperation({
                       owner,
                       name,
                       kind: "update",
-                      payload: {
-                        tools: ["codex"],
-                        modules: ["bmm"],
-                        userName: "Developer",
-                        outputFolder: "_bmad-output",
-                      },
+                      payload: {},
                     });
                     if (!r.success) setError(r.error);
                     await refresh();
@@ -437,6 +478,24 @@ export function Studio({
               </Group>
             </Group>
           </Paper>
+          <Alert color={data.workerOnline ? "green" : "orange"}>
+            {data.workerOnline
+              ? "Worker connected. Approved changes will be processed."
+              : "Worker offline. Start pnpm bmad:worker on the host to apply approved changes."}
+          </Alert>
+          <Text size="sm">
+            {Object.entries(data.installation.moduleVersions ?? {})
+              .map(([m, v]) => m + " " + v)
+              .join(" · ")}{" "}
+            {data.installation.reason}{" "}
+            <a
+              href="https://docs.bmad-method.org/start/install-bmad/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Official setup guide
+            </a>
+          </Text>
           <Group justify="space-between">
             <Title order={3}>Review changes · {pending.length} pending</Title>
             <Button variant="subtle" onClick={refresh}>
@@ -449,6 +508,14 @@ export function Studio({
               file?: string;
               files?: string[];
               writes?: string[];
+              version?: number;
+              fileChanges?: {
+                path: string;
+                before: string | null;
+                after: string | null;
+                beforeHash: string | null;
+                afterKnown?: boolean;
+              }[];
             };
             const payload = (o.payload ?? {}) as Record<string, unknown>;
             const a = data.agents.find((a) => a.slug === payload.slug);
@@ -492,7 +559,8 @@ export function Studio({
                           .map(
                             (n) =>
                               data.agents.find((a) => a.slug === n.agentSlug)
-                                ?.name ?? n.agentSlug,
+                                ?.name ??
+                              "Unavailable agent (legacy reference)",
                           )
                           .join(" → ")}
                       </Text>
@@ -531,6 +599,53 @@ export function Studio({
                         ))}
                     </>
                   )}
+                  {p.fileChanges?.length ? (
+                    <Accordion>
+                      {p.fileChanges.map((c) => (
+                        <Accordion.Item key={c.path} value={c.path}>
+                          <Accordion.Control>{c.path}</Accordion.Control>
+                          <Accordion.Panel>
+                            <SimpleGrid cols={{ base: 1, md: 2 }}>
+                              <div>
+                                <Text fw={600}>Before</Text>
+                                <pre
+                                  style={{
+                                    overflow: "auto",
+                                    fontSize: 14,
+                                    maxHeight: 320,
+                                  }}
+                                >
+                                  {c.before ?? "File does not exist"}
+                                </pre>
+                              </div>
+                              <div>
+                                <Text fw={600}>
+                                  {c.afterKnown === false
+                                    ? "Expected action"
+                                    : "After"}
+                                </Text>
+                                <pre
+                                  style={{
+                                    overflow: "auto",
+                                    fontSize: 14,
+                                    maxHeight: 320,
+                                  }}
+                                >
+                                  {c.afterKnown === false
+                                    ? "Installer-controlled file. Detected settings are preserved; the result is inspected after installation."
+                                    : (c.after ??
+                                      "Override removed; inherited settings apply")}
+                                </pre>
+                              </div>
+                            </SimpleGrid>
+                            <Text size="xs" c="dimmed">
+                              Changes after this review require a new draft.
+                            </Text>
+                          </Accordion.Panel>
+                        </Accordion.Item>
+                      ))}
+                    </Accordion>
+                  ) : null}
                   {p.writes && (
                     <Text size="sm">Changes: {p.writes.join(", ")}</Text>
                   )}
@@ -543,31 +658,6 @@ export function Studio({
                       Files: {p.file ?? p.files?.join(", ")}
                     </Text>
                   )}
-                  {o.kind === "customize_agent" && (
-                    <Accordion>
-                      <Accordion.Item value="diff">
-                        <Accordion.Control>Before and after</Accordion.Control>
-                        <Accordion.Panel>
-                          <Text size="sm" fw={600}>
-                            Current
-                          </Text>
-                          <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
-                            {typeof a?.persona === "string"
-                              ? a.persona
-                              : "Installed defaults"}
-                          </Text>
-                          <Text size="sm" fw={600} mt="md">
-                            Proposed
-                          </Text>
-                          <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
-                            {String(payload.persona ?? "")}
-                          </Text>
-                        </Accordion.Panel>
-                      </Accordion.Item>
-                    </Accordion>
-                  )}
-                  {o.error && <Alert color="red">{o.error}</Alert>}
-                  {o.output && <Text size="sm">{o.output}</Text>}
                   {o.status === "draft" &&
                     o.kind === "set_workflow" &&
                     !payload.graph && (
@@ -576,6 +666,41 @@ export function Studio({
                         graph draft before approving.
                       </Alert>
                     )}
+                  {o.status === "failed" &&
+                    o.error?.includes("heartbeat expired") && (
+                      <Button
+                        color="orange"
+                        variant="light"
+                        onClick={async () => {
+                          if (
+                            !window.confirm(
+                              "Confirm you have stopped the previous worker and checked partial files. Release this project lock?",
+                            )
+                          )
+                            return;
+                          const r = await releaseAbandonedOperation({
+                            owner,
+                            name,
+                            operationId: o.id,
+                            confirmedStopped: true,
+                          });
+                          if (!r.success) setError(r.error);
+                          else
+                            setNotice(
+                              "Project lock released. Create and review a fresh draft before retrying.",
+                            );
+                          await refresh();
+                        }}
+                      >
+                        Release abandoned project lock
+                      </Button>
+                    )}
+                  {o.status === "draft" && p.version !== 2 && (
+                    <Alert color="orange">
+                      Legacy draft: create a fresh draft to review actual file
+                      changes. Existing files have not been changed.
+                    </Alert>
+                  )}
                   {o.status === "draft" && (
                     <Group>
                       <Text size="sm" c="dimmed">
@@ -583,7 +708,10 @@ export function Studio({
                       </Text>
                       <Button
                         loading={busy}
-                        disabled={o.kind === "set_workflow" && !payload.graph}
+                        disabled={
+                          p.version !== 2 ||
+                          (o.kind === "set_workflow" && !payload.graph)
+                        }
                         onClick={async () => {
                           setBusy(true);
                           const r = await approveBmadOperation({
@@ -640,6 +768,38 @@ export function Studio({
           onRefresh={refresh}
         />
       )}
+      <Modal
+        opened={!!skillDetails}
+        onClose={() => setSkillDetails(null)}
+        title={skillDetails?.name}
+        size="lg"
+      >
+        <Stack>
+          <Text fw={600}>Purpose</Text>
+          <Text>{skillDetails?.description}</Text>
+          <Text fw={600}>Supported customization fields</Text>
+          <Text size="sm">
+            {skillDetails?.fields.join(", ") ||
+              "No installed customization schema. Create a managed copy to customize this capability."}
+          </Text>
+          <Text fw={600}>Inputs, outputs, and installed instructions</Text>
+          <Text size="sm" c="dimmed">
+            The installed skill defines its own prerequisites and outputs.
+            Reading these instructions does not execute the skill.
+          </Text>
+          <pre
+            style={{
+              overflow: "auto",
+              maxHeight: 500,
+              fontSize: 14,
+              whiteSpace: "pre-wrap",
+              overflowWrap: "anywhere",
+            }}
+          >
+            {skillDetails?.content}
+          </pre>
+        </Stack>
+      </Modal>
       <Modal
         opened={createOpen}
         onClose={() => setCreateOpen(false)}

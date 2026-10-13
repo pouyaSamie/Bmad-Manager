@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedChanges } from "./use-unsaved-changes";
 import { useState, useMemo } from "react";
 import { useMediaQuery } from "@mantine/hooks";
 import {
@@ -118,6 +119,7 @@ export function WorkflowEditor(props: {
   owner: string;
   name: string;
   onInspect: (a: Agent) => void;
+  connections: { id: string; name: string }[];
   onRefresh: () => Promise<void>;
 }) {
   return (
@@ -131,12 +133,14 @@ function Editor({
   owner,
   name,
   onInspect,
+  connections,
   onRefresh,
 }: {
   data: StudioData;
   owner: string;
   name: string;
   onInspect: (a: Agent) => void;
+  connections: { id: string; name: string }[];
   onRefresh: () => Promise<void>;
 }) {
   const [graph, setGraph] = useState<WorkflowGraph>(() =>
@@ -158,6 +162,9 @@ function Editor({
     [busy, setBusy] = useState(false);
   const [past, setPast] = useState<WorkflowGraph[]>([]),
     [future, setFuture] = useState<WorkflowGraph[]>([]);
+  const [savedGraph, setSavedGraph] = useState(JSON.stringify(graph));
+  const dirty = JSON.stringify(graph) !== savedGraph;
+  useUnsavedChanges(dirty);
   const flow = useReactFlow();
   const mobile = useMediaQuery("(max-width:48em)");
   const activeView = view ?? (mobile ? "list" : "canvas");
@@ -197,6 +204,19 @@ function Editor({
                 <Text size="xs" c="dimmed">
                   {a?.title ?? "Unavailable agent"}
                 </Text>
+                <Text size="xs" style={{ overflowWrap: "anywhere" }}>
+                  {(() => {
+                    const connection = connections.find(
+                      (c) =>
+                        c.id === (a?.connectionId ?? data.runtime.connectionId),
+                    );
+                    return connection
+                      ? connection.name +
+                          " · " +
+                          (a?.connectionId ? a.modelId : data.runtime.modelId)
+                      : "Choose a model";
+                  })()}
+                </Text>
                 <Button
                   size="xs"
                   variant="light"
@@ -209,7 +229,7 @@ function Editor({
           },
         };
       }),
-    [graph.nodes, data.agents, onInspect],
+    [graph.nodes, data.agents, data.runtime, connections, onInspect],
   );
   const edges = graph.edges.map((e) => ({
     ...e,
@@ -278,6 +298,12 @@ function Editor({
   }));
   return (
     <Stack>
+      {!graph.nodes.length && (
+        <Alert color="indigo">
+          Start with an empty design, add an agent, or choose the Manager
+          preset. No handoffs are created automatically.
+        </Alert>
+      )}
       <Group justify="space-between">
         <div>
           <Title order={1}>Workflow</Title>
@@ -298,6 +324,7 @@ function Editor({
             setBusy(false);
             if (!r.success) setError(r.error);
             else {
+              setSavedGraph(JSON.stringify(graph));
               setNotice("Design drafted. Review it in Project Settings.");
               await onRefresh();
             }

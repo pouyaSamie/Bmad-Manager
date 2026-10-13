@@ -16,6 +16,8 @@ import {
   SimpleGrid,
   Accordion,
 } from "@mantine/core";
+import Link from "next/link";
+import type { ConnectionEvidence } from "@/lib/model-adapters";
 import { Plus, RefreshCw, Plug } from "lucide-react";
 import {
   listConnections,
@@ -33,6 +35,7 @@ export type Connection = {
   status: string;
   models: ModelOption[] | null;
   checkedAt: Date | null;
+  evidence?: unknown;
 };
 export function Connections() {
   const [rows, setRows] = useState<Connection[]>([]),
@@ -71,6 +74,14 @@ export function Connections() {
   const preset = providers.find((p) => p.id === form.provider);
   return (
     <Stack gap="xl">
+      <Button
+        component={Link}
+        href="/diagnostics"
+        variant="subtle"
+        style={{ alignSelf: "flex-end" }}
+      >
+        Connection and worker diagnostics
+      </Button>
       <Group justify="space-between">
         <div>
           <Title order={1}>Connections</Title>
@@ -128,11 +139,53 @@ export function Connections() {
                 {providers.find((p) => p.id === c.provider)?.name ?? c.provider}
               </Text>
               <Text size="sm">{c.models?.length ?? 0} discovered models</Text>
+              {c.checkedAt &&
+                Date.now() - new Date(c.checkedAt).getTime() > 86400000 && (
+                  <Badge color="orange">Catalog stale · discover again</Badge>
+                )}
               <Text size="xs" c="dimmed">
                 {c.checkedAt
                   ? "Last checked " + new Date(c.checkedAt).toLocaleString()
                   : "Not checked yet"}
               </Text>
+              <Text size="xs" c="dimmed">
+                Catalog:{" "}
+                {(c.evidence as ConnectionEvidence)?.catalog?.status ??
+                  "unverified"}{" "}
+                · Authentication:{" "}
+                {(c.evidence as ConnectionEvidence)?.authentication?.status ??
+                  "unverified"}
+              </Text>
+              <Accordion>
+                <Accordion.Item value="tests">
+                  <Accordion.Control>Model test results</Accordion.Control>
+                  <Accordion.Panel>
+                    {Object.entries(
+                      (c.evidence as ConnectionEvidence)?.tests ?? {},
+                    ).map(([model, test]) => (
+                      <Text
+                        key={model}
+                        size="sm"
+                        style={{ overflowWrap: "anywhere" }}
+                      >
+                        {model} · {test.status} ·{" "}
+                        {new Date(test.checkedAt).toLocaleString()}
+                        {test.latencyMs
+                          ? " · " + (test.latencyMs / 1000).toFixed(1) + "s"
+                          : ""}
+                      </Text>
+                    ))}
+                    {!Object.keys(
+                      (c.evidence as ConnectionEvidence)?.tests ?? {},
+                    ).length && (
+                      <Text size="sm" c="dimmed">
+                        No model tests recorded. Test an agent using this
+                        connection.
+                      </Text>
+                    )}
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
               <Group>
                 <Button
                   variant="light"

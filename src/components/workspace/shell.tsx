@@ -89,8 +89,19 @@ export function WorkspaceShell({
               aria-label="Toggle navigation"
               size="sm"
             />
-            <Text component={Link} href="/" fw={750} size="lg">
+            <Text visibleFrom="sm" component={Link} href="/" fw={750} size="lg">
               Bmad<span className="workspace-muted"> Manager</span>
+            </Text>
+            <Text
+              hiddenFrom="sm"
+              component={Link}
+              href={base || "/"}
+              fw={700}
+              size="sm"
+              maw={160}
+              truncate="end"
+            >
+              {project?.displayName ?? "Bmad Manager"}
             </Text>
             <Text visibleFrom="sm" c="dimmed" size="sm">
               / {project?.displayName ?? "Workspace"}{" "}

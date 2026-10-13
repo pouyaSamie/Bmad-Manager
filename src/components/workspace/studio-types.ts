@@ -1,3 +1,5 @@
+import type { CustomizationState } from "@/lib/agent-behavior";
+import type { InstallationProfile } from "@/lib/bmad-installation";
 import type { WorkflowGraph } from "@/lib/workflow-graph";
 export type Agent = {
   id: string;
@@ -7,6 +9,7 @@ export type Agent = {
   icon: string;
   description: string | null;
   persona: unknown;
+  customization: CustomizationState;
   skillName: string | null;
   source: string;
   scope: string;
@@ -34,6 +37,8 @@ export type Operation = {
   createdAt: string | Date;
 };
 export type StudioData = {
+  installation: InstallationProfile;
+  workerOnline: boolean;
   runtime: {
     id: string;
     workflow: WorkflowGraph | unknown;

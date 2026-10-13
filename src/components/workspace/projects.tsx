@@ -1,4 +1,5 @@
 "use client";
+import { SetupProgress } from "./setup-progress";
 import Link from "next/link";
 import {
   Title,
@@ -173,6 +174,9 @@ export function ProjectOverview({
           Project settings
         </Button>
       </Group>
+      {repo.sourceType === "local" && (
+        <SetupProgress owner={repo.owner} name={repo.name} />
+      )}
       <SimpleGrid cols={{ base: 1, md: 3 }}>
         {[
           [
