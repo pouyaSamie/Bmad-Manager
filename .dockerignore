@@ -27,4 +27,12 @@ coverage
 **/__tests__/**
 *.log
 src/generated
+.secrets
+.bridge-state
+.codex
+.gemini
+.claude
+.agents
+.mcp.json
+data
 

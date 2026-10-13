@@ -50,6 +50,53 @@ services:
       postgres:
         condition: service_healthy
 
+  codex-bridge:
+    profiles: [cli, codex]
+    build:
+      context: .
+      dockerfile: docker/cli-bridge.Dockerfile
+      target: codex
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,mode=1777
+    volumes:
+      - codex_login:/home/node
+    secrets:
+      - source: codex_bridge_token
+        target: bridge_token
+    # No published ports or project mounts. The web service uses the service DNS.
+
+  agy-bridge:
+    profiles: [cli, agy]
+    build:
+      context: .
+      dockerfile: docker/cli-bridge.Dockerfile
+      target: agy
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,mode=1777
+    volumes:
+      - agy_login:/home/node
+    secrets:
+      - source: agy_bridge_token
+        target: bridge_token
+
+secrets:
+  codex_bridge_token:
+    file: .secrets/codex-bridge-token
+  agy_bridge_token:
+    file: .secrets/agy-bridge-token
+
 volumes:
   postgres_data:
+  codex_login:
+  agy_login:
 

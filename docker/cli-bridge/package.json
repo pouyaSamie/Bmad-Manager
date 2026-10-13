@@ -1,0 +1,14 @@
+{
+  "name": "bmad-cli-bridge-runtime",
+  "private": true,
+  "version": "1.0.0",
+  "overrides": {
+    "esbuild": "0.28.1"
+  },
+  "dependencies": {
+    "dotenv": "17.3.1",
+    "smol-toml": "1.9.1",
+    "tsx": "4.21.0",
+    "zod": "4.3.6"
+  }
+}

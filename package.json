@@ -38,6 +38,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "codex:gateway": "tsx scripts/cli-gateway.ts",
+    "cli:setup": "node scripts/setup-bridge-secrets.mjs",
+    "test:cli-containers": "node scripts/verify-cli-containers.mjs",
     "db:migrate-workspace": "tsx scripts/migrate-workspace.ts",
     "test:journey": "tsx scripts/verify-workspace.ts"
   },
