@@ -1,0 +1,16 @@
+{
+  "capturedAt": "2026-10-13T03:02:17.127Z",
+  "base": "http://localhost:3002",
+  "project": "/repo/local/chess-report-3aaf4293",
+  "tool": "Playwright",
+  "desktop": {
+    "width": 1440,
+    "height": 1000
+  },
+  "mobile": {
+    "width": 390,
+    "height": 1000
+  },
+  "workflow": "Unsaved Manager preset preview",
+  "errors": []
+}
