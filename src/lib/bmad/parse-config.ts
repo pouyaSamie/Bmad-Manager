@@ -1,3 +1,5 @@
+import { parse } from "../toml";
+import { mergeCustomization } from "../bmad-customization";
 import yaml from "js-yaml";
 import type { ContentProvider } from "@/lib/content-provider";
 
@@ -40,6 +42,30 @@ export async function getBmadConfig(
   provider: ContentProvider,
   paths: string[],
 ): Promise<BmadConfig> {
+  const tomlPaths = [
+    "_bmad/config.toml",
+    "_bmad/config.user.toml",
+    "_bmad/custom/config.toml",
+    "_bmad/custom/config.user.toml",
+  ].filter((p) => paths.includes(p));
+  if (tomlPaths.length) {
+    let doc = {};
+    for (const p of tomlPaths)
+      doc = mergeCustomization(doc, parse(await provider.getFileContent(p)));
+    const core = (doc as { core?: Record<string, unknown> }).core ?? {};
+    const output =
+      typeof core.output_folder === "string"
+        ? normalizeOutputFolder(core.output_folder)
+        : DEFAULT_OUTPUT_DIR;
+    const initiative =
+      typeof core.active_initiative === "string" ? core.active_initiative : "";
+    if (initiative.split("/").some((s) => s === ".." || s === "."))
+      throw new Error("Invalid initiative path");
+    return {
+      outputDir:
+        (output ?? DEFAULT_OUTPUT_DIR) + (initiative ? "/" + initiative : ""),
+    };
+  }
   if (!paths.includes(CORE_CONFIG_PATH)) {
     return { outputDir: DEFAULT_OUTPUT_DIR };
   }
@@ -107,38 +133,26 @@ export async function resolveBmadOutputDir(
 
 import type { StoryAgent } from "./types";
 
-function extractAgentBlocks(content: string): Map<string, string> {
-  const sections = content
-    .split(/\r?\n(?=\[agents\.)/)
-    .filter((section) => section.startsWith("[agents."));
-  return new Map(
-    sections.flatMap((block) => {
-      const slug = block.match(/^\[agents\.([^\]]+)\]/)?.[1];
-      return slug ? [[slug, block] as const] : [];
-    })
-  );
+export function parseBmadAgents(
+  configToml: string,
+  teamConfigToml?: string,
+  userConfigToml?: string,
+  personalConfigToml?: string,
+): StoryAgent[] {
+  let doc = {};
+  for (const text of [
+    configToml,
+    userConfigToml,
+    teamConfigToml,
+    personalConfigToml,
+  ])
+    if (text?.trim()) doc = mergeCustomization(doc, parse(text));
+  return Object.entries(
+    (doc as { agents?: Record<string, Record<string, unknown>> }).agents ?? {},
+  ).map(([slug, a]) => ({
+    slug,
+    name: typeof a.name === "string" ? a.name : slug,
+    title: typeof a.title === "string" ? a.title : "BMAD Agent",
+    icon: typeof a.icon === "string" ? a.icon : "🤖",
+  }));
 }
-
-function extractTomlField(block: string | undefined, field: string): string | null {
-  return block?.match(new RegExp(`^${field}\\s*=\\s*"([^"]*)"`, "m"))?.[1] ?? null;
-}
-
-export function parseBmadAgents(configToml: string, teamConfigToml?: string): StoryAgent[] {
-  const base = extractAgentBlocks(configToml || "");
-  const team = extractAgentBlocks(teamConfigToml || "");
-  const slugs = new Set([...base.keys(), ...team.keys()]);
-
-  return [...slugs].map((slug) => {
-    const blocks = [base.get(slug), team.get(slug)];
-    const read = (field: string, fallback: string) =>
-      blocks.reduce<string>((val, blk) => extractTomlField(blk, field) ?? val, fallback);
-
-    return {
-      slug,
-      name: read("name", slug),
-      title: read("title", "BMAD Agent"),
-      icon: read("icon", "🤖"),
-    };
-  });
-}
-

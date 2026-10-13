@@ -36,9 +36,7 @@ export async function getBmadProject(
   const bmadPaths = allPaths.filter((p) => p.startsWith(outputDir + "/"));
 
   const sprintStatusPath = bmadPaths.find(
-    (p) =>
-      p.includes(IMPLEMENTATION) &&
-      p.endsWith("sprint-status.yaml")
+    (p) => p.includes(IMPLEMENTATION) && p.endsWith("sprint-status.yaml"),
   );
 
   // Auto-detect epics source: single file first, then directory fallback.
@@ -122,7 +120,8 @@ export async function getBmadProject(
     const filename = p.split("/").pop() || "";
     if (/^epic[-_]/i.test(filename)) return false;
     if (/^bmad[-_]/i.test(filename)) return false;
-    if (/^(?:spec[-_]|story[-_]|task[-_])?\d+[-_.]\d+.*\.md$/i.test(filename)) return true;
+    if (/^(?:spec[-_]|story[-_]|task[-_])?\d+[-_.]\d+.*\.md$/i.test(filename))
+      return true;
     if (/^[a-z][a-z0-9_-]*-\d+-.+\.md$/i.test(filename)) return true;
     if (/^story[_-]?\d/i.test(filename)) return true;
     return false;
@@ -130,7 +129,9 @@ export async function getBmadProject(
   const folderStoryPaths = epicsPath
     ? [] // single-file mode: don't pull stories from epic folders
     : epicFolders.flatMap((e) => e.storyPaths);
-  const storyPaths = Array.from(new Set([...implStoryPaths, ...folderStoryPaths]));
+  const storyPaths = Array.from(
+    new Set([...implStoryPaths, ...folderStoryPaths]),
+  );
 
   const fetchContent = (path: string) => provider.getFileContent(path);
 
@@ -141,7 +142,7 @@ export async function getBmadProject(
       fetchContent(sprintStatusPath).then((content) => ({
         key: "sprint",
         content,
-      }))
+      })),
     );
   }
 
@@ -150,7 +151,7 @@ export async function getBmadProject(
       fetchContent(epicsPath).then((content) => ({
         key: "epics",
         content,
-      }))
+      })),
     );
   }
 
@@ -159,7 +160,7 @@ export async function getBmadProject(
       fetchContent(ep).then((content) => ({
         key: `epic-file:${ep}`,
         content,
-      }))
+      })),
     );
   }
 
@@ -168,22 +169,24 @@ export async function getBmadProject(
       fetchContent(sp).then((content) => ({
         key: `story:${sp}`,
         content,
-      }))
+      })),
     );
   }
 
   const configTomlPath = allPaths.find(
-    (p) => p === "_bmad/config.toml" || p.endsWith("/_bmad/config.toml")
+    (p) => p === "_bmad/config.toml" || p.endsWith("/_bmad/config.toml"),
   );
   const teamConfigTomlPath = allPaths.find(
-    (p) => p === "_bmad/custom/config.toml" || p.endsWith("/_bmad/custom/config.toml")
+    (p) =>
+      p === "_bmad/custom/config.toml" ||
+      p.endsWith("/_bmad/custom/config.toml"),
   );
 
   if (configTomlPath) {
     fetches.push(
       fetchContent(configTomlPath)
         .then((content) => ({ key: "config-toml", content }))
-        .catch(() => ({ key: "config-toml", content: "" }))
+        .catch(() => ({ key: "config-toml", content: "" })),
     );
   }
 
@@ -191,10 +194,16 @@ export async function getBmadProject(
     fetches.push(
       fetchContent(teamConfigTomlPath)
         .then((content) => ({ key: "team-config-toml", content }))
-        .catch(() => ({ key: "team-config-toml", content: "" }))
+        .catch(() => ({ key: "team-config-toml", content: "" })),
     );
   }
 
+  for (const [path, key] of [
+    ["_bmad/config.user.toml", "user-config-toml"],
+    ["_bmad/custom/config.user.toml", "personal-config-toml"],
+  ])
+    if (allPaths.includes(path))
+      fetches.push(fetchContent(path).then((content) => ({ key, content })));
   const results = await Promise.all(fetches);
 
   const parseErrors: ParseErrorEntry[] = [];
@@ -238,14 +247,22 @@ export async function getBmadProject(
         sprintStatus = parsed.sprintStatus;
         epicStatuses = parsed.epicStatuses;
       } else {
-        parseErrors.push({ file: sprintStatusPath!, error: "Failed to parse sprint status YAML. Check the file syntax.", contentType: "sprint-status" });
+        parseErrors.push({
+          file: sprintStatusPath!,
+          error: "Failed to parse sprint status YAML. Check the file syntax.",
+          contentType: "sprint-status",
+        });
       }
     } else if (key === "epics") {
       totalFiles++;
       const result = parseEpics(content);
       rawEpics = result.epics;
       if (result.error) {
-        parseErrors.push({ file: epicsPath!, error: result.error, contentType: "epic" });
+        parseErrors.push({
+          file: epicsPath!,
+          error: result.error,
+          contentType: "epic",
+        });
       }
     } else if (key.startsWith("epic-file:")) {
       totalFiles++;
@@ -256,7 +273,12 @@ export async function getBmadProject(
         rawEpics.push(epic);
         epicByMetaPath.set(filePath, epic);
       } else {
-        parseErrors.push({ file: filePath, error: "Failed to parse individual epic file. Check format (frontmatter or heading).", contentType: "epic" });
+        parseErrors.push({
+          file: filePath,
+          error:
+            "Failed to parse individual epic file. Check format (frontmatter or heading).",
+          contentType: "epic",
+        });
       }
     } else if (key.startsWith("story:")) {
       totalFiles++;
@@ -275,7 +297,12 @@ export async function getBmadProject(
         rawStories.push(story);
         storyByPath.set(storyPath, story);
       } else {
-        parseErrors.push({ file: storyPath, error: "Failed to parse story. Check the markdown format and section structure.", contentType: "story" });
+        parseErrors.push({
+          file: storyPath,
+          error:
+            "Failed to parse story. Check the markdown format and section structure.",
+          contentType: "story",
+        });
       }
     } else if (key === "config-toml") {
       configTomlContent = content;
@@ -307,11 +334,24 @@ export async function getBmadProject(
   const successfulFiles = totalFiles - parseErrors.length;
 
   if (parseErrors.length > 0) {
-    console.warn(`[BMAD Parse] ${owner}/${repo}: ${parseErrors.length} parsing errors out of ${totalFiles} files`);
+    console.warn(
+      `[BMAD Parse] ${owner}/${repo}: ${parseErrors.length} parsing errors out of ${totalFiles} files`,
+    );
   }
 
-  const projectAgents = parseBmadAgents(configTomlContent, teamConfigTomlContent);
-  const correlated = correlate(sprintStatus, rawEpics, rawStories, epicStatuses, projectAgents);
+  const projectAgents = parseBmadAgents(
+    configTomlContent,
+    teamConfigTomlContent,
+    results.find((r) => r.key === "user-config-toml")?.content,
+    results.find((r) => r.key === "personal-config-toml")?.content,
+  );
+  const correlated = correlate(
+    sprintStatus,
+    rawEpics,
+    rawStories,
+    epicStatuses,
+    projectAgents,
+  );
   const epics = [...correlated.epics].sort((a, b) => compareIds(a.id, b.id));
   const stories = correlated.stories;
   const storyPathSet = new Set(storyPaths);
@@ -319,13 +359,13 @@ export async function getBmadProject(
   const fileTree = buildFileTree(docPaths, outputDir);
 
   // Detect a "Docs" folder (case-insensitive) via rootDirectories (F20)
-  const docsFolderName = providerTree.rootDirectories.find(
-    (d) => d.toLowerCase() === "docs"
-  ) ?? null;
+  const docsFolderName =
+    providerTree.rootDirectories.find((d) => d.toLowerCase() === "docs") ??
+    null;
   const docsTree = docsFolderName
     ? buildFileTree(
         allPaths.filter((p) => p.startsWith(docsFolderName + "/")),
-        docsFolderName
+        docsFolderName,
       )
     : [];
 
@@ -444,8 +484,7 @@ export function parseBmadFile(
         };
       case "markdown": {
         const { data, content: body } = matter(content);
-        const frontmatter =
-          data && Object.keys(data).length > 0 ? data : null;
+        const frontmatter = data && Object.keys(data).length > 0 ? data : null;
         return {
           contentType,
           frontmatter,

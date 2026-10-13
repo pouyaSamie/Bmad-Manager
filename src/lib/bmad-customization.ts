@@ -1,4 +1,5 @@
-import { parse, type TomlValue } from "smol-toml";
+import { parse } from "./toml";
+import { type TomlValue } from "smol-toml";
 function table(
   value: TomlValue | undefined,
 ): value is Record<string, TomlValue> {
@@ -20,16 +21,21 @@ export function mergeCustomization(
     if (table(before) && table(value))
       result[key] = mergeCustomization(before, value);
     else if (Array.isArray(before) && Array.isArray(value)) {
-      const keyed =
-        value.length > 0 &&
-        value.every((item) => table(item) && ("code" in item || "id" in item));
+      const combinedItems = [...before, ...value];
+      const field = ["code", "id"].find(
+        (key) =>
+          combinedItems.length > 0 &&
+          combinedItems.every((item) => table(item) && key in item),
+      );
+      const keyed = !!field;
       if (keyed) {
         const combined = [...before];
         for (const item of value) {
           const entry = item as Record<string, TomlValue>;
-          const field = "code" in entry ? "code" : "id";
+          const keyField = field!;
           const index = combined.findIndex(
-            (existing) => table(existing) && existing[field] === entry[field],
+            (existing) =>
+              table(existing) && existing[keyField] === entry[keyField],
           );
           if (index < 0) combined.push(item);
           else combined[index] = item;

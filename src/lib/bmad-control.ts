@@ -1,5 +1,6 @@
+import { skillLocations, detectInstallation } from "./bmad-installation";
 import crypto from "node:crypto";
-import { parse } from "smol-toml";
+import { parse } from "./toml";
 import { effectivePersona } from "./bmad-customization";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
@@ -26,7 +27,8 @@ export type DiscoveredAgent = {
   source: "discovered" | "managed";
 };
 
-const MAX_OUTPUT = 32_000;
+import { redact } from "./output-redaction";
+export { redact } from "./output-redaction";
 
 function key(): Buffer {
   const value = process.env.AGENT_ENCRYPTION_KEY;
@@ -65,15 +67,6 @@ export function decryptSecret(value: string): string {
     decipher.update(Buffer.from(ciphertext, "base64url")),
     decipher.final(),
   ]).toString("utf8");
-}
-
-export function redact(value: string): string {
-  return value
-    .replace(
-      /(api[_-]?key|authorization|bearer)\s*[:=]\s*[^\s"']+/gi,
-      "$1=[REDACTED]",
-    )
-    .slice(-MAX_OUTPUT);
 }
 
 export function safeChild(root: string, relative: string): string {
@@ -147,6 +140,9 @@ export async function discoverBmad(root: string) {
   const projectRoot = await assertProjectRoot(root);
   const configPath = safeChild(projectRoot, "_bmad/config.toml");
   const config = await fs.readFile(configPath, "utf8").catch(() => "");
+  const installedPersonal = await fs
+    .readFile(safeChild(projectRoot, "_bmad/config.user.toml"), "utf8")
+    .catch(() => "");
   const teamConfig = await fs
     .readFile(safeChild(projectRoot, "_bmad/custom/config.toml"), "utf8")
     .catch(() => "");
@@ -156,11 +152,22 @@ export async function discoverBmad(root: string) {
   const installedVersion =
     config.match(/^\s*version\s*=\s*["']?([^"'\n]+)/m)?.[1]?.trim() ?? null;
   const base = agentBlocks(config);
+  const user = agentBlocks(installedPersonal);
   const team = agentBlocks(teamConfig);
   const personal = agentBlocks(personalConfig);
-  const slugs = new Set([...base.keys(), ...team.keys(), ...personal.keys()]);
+  const slugs = new Set([
+    ...base.keys(),
+    ...user.keys(),
+    ...team.keys(),
+    ...personal.keys(),
+  ]);
   const agents: DiscoveredAgent[] = [...slugs].map((slug) => {
-    const blocks = [base.get(slug), team.get(slug), personal.get(slug)];
+    const blocks = [
+      base.get(slug),
+      user.get(slug),
+      team.get(slug),
+      personal.get(slug),
+    ];
     const read = (field: string, fallback: string) =>
       blocks.reduce<string>(
         (value, block) => tomlString(block, field) ?? value,
@@ -188,14 +195,8 @@ export async function discoverBmad(root: string) {
     };
   });
   const skills: DiscoveredSkill[] = [];
-  for (const skillRoot of [
-    ".agents/skills",
-    ".agent/skills",
-    ".claude/skills",
-    ".cline/skills",
-    ".bob/skills",
-    ".adal/skills",
-  ]) {
+  const moduleRecords: Record<string, string> = {};
+  for (const skillRoot of skillLocations) {
     const skillsRoot = safeChild(projectRoot, skillRoot);
     const directories = await fs
       .readdir(skillsRoot, { withFileTypes: true })
@@ -203,6 +204,11 @@ export async function discoverBmad(root: string) {
     for (const dirent of directories) {
       if (!dirent.isDirectory()) continue;
       const directory = safeChild(projectRoot, `${skillRoot}/${dirent.name}`);
+      const record = await fs
+        .readFile(path.join(directory, "bmod.toml"), "utf8")
+        .catch(() => "");
+      if (record)
+        moduleRecords[skillRoot + "/" + dirent.name + "/bmod.toml"] = record;
       const skill = await fs
         .readFile(path.join(directory, "SKILL.md"), "utf8")
         .catch(() => "");
@@ -285,7 +291,29 @@ export async function discoverBmad(root: string) {
     );
   }
 
-  return { projectRoot, installedVersion, agents, skills, config };
+  const profileFiles: Record<string, string> = { ...moduleRecords };
+  for (const p of [
+    "_bmad/config.toml",
+    "_bmad/config.user.toml",
+    "_bmad/custom/config.toml",
+    "_bmad/custom/config.user.toml",
+    "_bmad/core/config.yaml",
+    "_bmad/_config/manifest.yaml",
+  ])
+    profileFiles[p] = await fs
+      .readFile(safeChild(projectRoot, p), "utf8")
+      .catch(() => "");
+  const profile = detectInstallation(profileFiles, [
+    ...new Set(skills.map((s) => s.directory.split("/skills/")[0] + "/skills")),
+  ]);
+  return {
+    projectRoot,
+    installedVersion: profile.version ?? installedVersion,
+    agents,
+    skills,
+    config,
+    profile,
+  };
 }
 export function validCustomPath(relative: string): boolean {
   return /^_bmad\/custom\/[a-z0-9_-]+(?:\.user)?\.toml$/i.test(relative);
@@ -296,6 +324,7 @@ export function validSkillSlug(value: string): boolean {
 }
 
 export type BmadInstallOptions = {
+  action?: "install" | "update";
   tools?: string[];
   modules?: string[];
   userName?: string;
@@ -326,9 +355,11 @@ export async function runBmadInstaller(
       : ["bmm"];
 
   const args = [
-    "bmad-method",
+    "bmad-method@6.12.0",
     "install",
     "--yes",
+    "--action",
+    options.action ?? "install",
     "--directory",
     projectRoot,
     "--modules",
@@ -357,18 +388,20 @@ export async function runBmadInstaller(
     args.push("--output-folder", options.outputFolder.trim());
   }
 
-  if (options.channel === "next") {
-    args.push("--channel", "next");
-  } else {
-    args.push("--channel", "stable");
+  if (options.action !== "update" || options.channel) {
+    if (options.channel === "next") {
+      args.push("--channel", "next");
+    } else {
+      args.push("--channel", "stable");
+    }
   }
-
-  if (options.shims) {
-    args.push("--shims");
-  } else {
-    args.push("--no-shims");
+  if (options.action !== "update" || options.shims !== undefined) {
+    if (options.shims) {
+      args.push("--shims");
+    } else {
+      args.push("--no-shims");
+    }
   }
-
   return new Promise<string>((resolve, reject) => {
     const isWindows = process.platform === "win32";
     const npxCli = path.join(
@@ -380,6 +413,12 @@ export async function runBmadInstaller(
       isWindows ? [npxCli, ...args] : args,
       { cwd: projectRoot, shell: false, windowsHide: true },
     );
+    const timeout = setTimeout(() => {
+      child.kill();
+      reject(
+        new Error("Installer timed out; inspect project files before retrying"),
+      );
+    }, 300000);
     let output = "";
     child.stdout.on("data", (chunk) => {
       output += chunk.toString();
@@ -387,14 +426,18 @@ export async function runBmadInstaller(
     child.stderr.on("data", (chunk) => {
       output += chunk.toString();
     });
-    child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      return code === 0
         ? resolve(redact(output))
         : reject(
             new Error(redact(output) || `BMad installer exited with ${code}`),
-          ),
-    );
+          );
+    });
   });
 }
 

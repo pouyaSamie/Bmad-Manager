@@ -80,7 +80,7 @@ export function migrateGraph(
       payloadType?: string;
     }[];
   } | null;
-  const ordered = (old?.agentIds ?? agents.map((a) => a.id)).map(
+  const ordered = (old?.agentIds ?? []).map(
     (id) =>
       agents.find((a) => a.id === id) ?? { id, slug: "unavailable-" + id },
   );
