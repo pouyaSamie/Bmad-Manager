@@ -60,7 +60,7 @@ export const providers = [
     key: false,
   },
 ];
-export type ModelOption = { id: string; name: string };
+export type ModelOption = { id: string; name: string; contextWindow?:number;inputModalities?:string[];outputModalities?:string[] };
 export function requestHeaders(key: string) {
   return {
     "content-type": "application/json",

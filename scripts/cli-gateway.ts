@@ -9,7 +9,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { parse } from "smol-toml";
 import { z } from "zod";
-import {redact} from "../src/lib/bmad-control";
+import { redact } from "../src/lib/output-redaction";
 const provider = process.argv.includes("--agy") ? "agy" : "codex";
 const token = process.env.CLI_BRIDGE_TOKEN;
 if (!token || token.length < 32)
@@ -139,8 +139,13 @@ async function codex(workdir: string) {
         if (typeof e.id === "number" && pending.has(e.id)) {
           const p = pending.get(e.id)!;
           pending.delete(e.id);
-          if (e.error) {console.warn("Codex request rejected:",redact(String(e.error.message??"Unknown error")));p.reject(new Error("Codex request failed"));}
-          else p.resolve(e.result ?? {});
+          if (e.error) {
+            console.warn(
+              "Codex request rejected:",
+              redact(String(e.error.message ?? "Unknown error")),
+            );
+            p.reject(new Error("Codex request failed"));
+          } else p.resolve(e.result ?? {});
         } else if (e.id !== undefined) {
           child.stdin.write(
             JSON.stringify({
@@ -217,6 +222,31 @@ function emit(res: http.ServerResponse, model: string, text: string) {
       "\n\n",
   );
 }
+async function cliVersion(kind: "codex" | "agy") {
+  const b = await binary(kind);
+  return new Promise<string>((resolve) => {
+    const child = spawn(b.bin, [...b.args, "--version"], {
+      windowsHide: true,
+      shell: false,
+      stdio: "pipe",
+    });
+    let text = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolve("unverified");
+    }, 5000);
+    child.stdout.on("data", (c) => (text += c));
+    child.stderr.resume();
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve("unavailable");
+    });
+    child.on("close", () => {
+      clearTimeout(timer);
+      resolve(text.match(/\d+\.\d+(?:\.\d+)?/)?.[0] ?? "unverified");
+    });
+  });
+}
 const server = http.createServer(async (req, res) => {
   if (!authorized(req)) {
     res.writeHead(401).end();
@@ -238,11 +268,13 @@ const server = http.createServer(async (req, res) => {
     if (provider === "agy") await assertAgyRestricted();
     if (req.method === "GET" && req.url === "/v1/models") {
       let models: { id: string; name: string }[] = [];
+      let authenticated = false;
       if (provider === "codex") {
         const rpc = await codex(workdir);
         child = rpc.child;
         const account = await rpc.call("account/read", { refreshToken: false });
         if (!account.account) throw new Error("Codex login required");
+        authenticated = true;
         let cursor: unknown;
         do {
           const catalog = await rpc.call("model/list", {
@@ -289,7 +321,21 @@ const server = http.createServer(async (req, res) => {
           .map((m) => ({ id: m[1], name: m[2] }));
       }
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ data: models, restricted: true }));
+      res.end(
+        JSON.stringify({
+          data: models,
+          restricted: true,
+          authenticated,
+          diagnostics: {
+            provider,
+            version: process.env.npm_package_version ?? "1",
+            login: authenticated ? "verified" : "unverified",
+            restricted: true,
+            protocol: provider === "codex" ? "app-server" : "openai-compatible",
+            cliVersion: await cliVersion(provider),
+          },
+        }),
+      );
       return;
     }
     if (req.method !== "POST" || req.url !== "/v1/chat/completions") {
@@ -329,7 +375,10 @@ const server = http.createServer(async (req, res) => {
           if (e.method === "turn/completed") {
             const turn = e.params.turn as { status: string };
             if (turn.status === "completed") resolve();
-            else {console.warn("Codex turn ended:",redact(JSON.stringify(turn)));reject(new Error("Codex turn failed"));}
+            else {
+              console.warn("Codex turn ended:", redact(JSON.stringify(turn)));
+              reject(new Error("Codex turn failed"));
+            }
           }
         });
         child!.once("close", () => reject(new Error("Codex process stopped")));
@@ -341,7 +390,7 @@ const server = http.createServer(async (req, res) => {
             approvalPolicy: "never",
             sandboxPolicy: {
               type: "readOnly",
-              networkAccess:false,
+              networkAccess: false,
             },
           });
         } catch (e) {
@@ -421,8 +470,33 @@ const server = http.createServer(async (req, res) => {
     }
   } finally {
     clearTimeout(timer);
-    if(child&&child.exitCode===null){await new Promise<void>(resolve=>{const timeout=setTimeout(resolve,5000);child!.once("close",()=>{clearTimeout(timeout);resolve()});child!.kill();});}
-    if(workdir){const resolved=path.resolve(workdir);if(!resolved.startsWith(path.resolve(os.tmpdir())+path.sep+"bmad-test-"))throw new Error("Unexpected bridge cleanup path");await fs.rm(resolved,{recursive:true,force:true,maxRetries:5,retryDelay:150}).catch(()=>console.warn("Temporary test workspace cleanup deferred"));}
+    if (child && child.exitCode === null) {
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(resolve, 5000);
+        child!.once("close", () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        child!.kill();
+      });
+    }
+    if (workdir) {
+      const resolved = path.resolve(workdir);
+      if (
+        !resolved.startsWith(
+          path.resolve(os.tmpdir()) + path.sep + "bmad-test-",
+        )
+      )
+        throw new Error("Unexpected bridge cleanup path");
+      await fs
+        .rm(resolved, {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 150,
+        })
+        .catch(() => console.warn("Temporary test workspace cleanup deferred"));
+    }
   }
 });
 server.listen(port, host, () =>

@@ -1,3 +1,9 @@
+import {
+  boundedMessages,
+  streamDelta,
+  connectionStatus,
+  type ConnectionEvidence,
+} from "@/lib/model-adapters";
 import { NextRequest } from "next/server";
 import fs from "node:fs/promises";
 import { z } from "zod";
@@ -73,7 +79,8 @@ export async function POST(req: NextRequest) {
         { error: "Choose and verify a connection before testing this agent" },
         { status: 409 },
       );
-    const available = connection.models as { id: string }[] | null;
+    const available = connection.models as
+      { id: string; contextWindow?: number }[] | null;
     if (!available?.some((m) => m.id === model))
       return Response.json(
         { error: "Discover models and choose an available model first" },
@@ -134,7 +141,7 @@ export async function POST(req: NextRequest) {
       persona +
       "\nAttached skill for reference (execution unavailable):\n" +
       skillContent.slice(0, 24000);
-    await prisma.bmadMessage.create({
+    const userRow = await prisma.bmadMessage.create({
       data: {
         conversationId: conversation.id,
         role: "user",
@@ -170,6 +177,7 @@ export async function POST(req: NextRequest) {
           }
         };
         let status = "completed";
+        let finished = false;
         try {
           send({
             type: "metadata",
@@ -185,29 +193,54 @@ export async function POST(req: NextRequest) {
             body: JSON.stringify({
               model,
               stream: true,
-              messages: [
-                { role: "system", content: system },
-                ...history.map((m) => ({ role: m.role, content: m.content })),
-                { role: "user", content: p.message },
-              ],
+              messages: boundedMessages(
+                system,
+                history,
+                p.message,
+                available?.find((m) => m.id === model)?.contextWindow,
+              ),
             }),
           });
           if (!upstream.ok || !upstream.body)
             throw new Error("PROVIDER_REQUEST_FAILED");
           for await (const data of sseData(upstream.body)) {
-            if (data === "[DONE]") break;
+            if (data === "[DONE]") {
+              finished = true;
+              break;
+            }
             const event = JSON.parse(data);
-            if (event.error) throw new Error("PROVIDER_STREAM_FAILED");
-            const delta = event.choices?.[0]?.delta?.content;
+            const chunk = streamDelta(event);
+            finished ||= chunk.finished;
+            const delta = chunk.text;
             if (typeof delta === "string") {
               answer += delta;
               send({ type: "text", text: delta });
             }
           }
+          if (!finished) throw new Error("INCOMPLETE_RESPONSE");
           if (!answer.trim()) throw new Error("EMPTY_RESPONSE");
           await prisma.bmadConnection.update({
             where: { id: connection!.id },
-            data: { status: "tested", checkedAt: new Date() },
+            data: {
+              status: "tested",
+              checkedAt: new Date(),
+              evidence: {
+                ...((connection!.evidence as object) ?? {}),
+                authentication: {
+                  status: key ? "verified" : "not_required",
+                  checkedAt: new Date().toISOString(),
+                },
+                tests: {
+                  ...((connection!.evidence as ConnectionEvidence)?.tests ??
+                    {}),
+                  [model]: {
+                    status: "completed",
+                    checkedAt: new Date().toISOString(),
+                    latencyMs: Date.now() - started,
+                  },
+                },
+              },
+            },
           });
           send({ type: "completion", latencyMs: Date.now() - started });
         } catch (error) {
@@ -215,9 +248,25 @@ export async function POST(req: NextRequest) {
             abort.signal.aborted && abort.signal.reason !== "timeout"
               ? "cancelled"
               : "failed";
+          const evidence = {
+            ...((connection!.evidence as ConnectionEvidence) ?? {}),
+            tests: {
+              ...((connection!.evidence as ConnectionEvidence)?.tests ?? {}),
+              [model]: { status, checkedAt: new Date().toISOString() },
+            },
+          };
+          await prisma.bmadConnection.update({
+            where: { id: connection!.id },
+            data: { evidence, status: connectionStatus(evidence) },
+          });
           send({ type: "error", error: sanitizeError(error, "NETWORK_ERROR") });
         } finally {
           clearTimeout(timeout);
+          if (status !== "completed")
+            await prisma.bmadMessage.update({
+              where: { id: userRow.id },
+              data: { status },
+            });
           await prisma.bmadMessage.update({
             where: { id: answerRow.id },
             data: {

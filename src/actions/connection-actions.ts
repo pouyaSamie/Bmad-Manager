@@ -1,4 +1,10 @@
 "use server";
+
+import {
+  modelCatalog,
+  connectionStatus,
+  type ConnectionEvidence,
+} from "@/lib/model-adapters";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
@@ -78,6 +84,7 @@ export async function saveConnection(
       status: "unverified",
       checkedAt: null,
       models: [],
+      evidence: {},
     };
     const row = old
       ? await prisma.bmadConnection.update({ where: { id: old.id }, data })
@@ -114,16 +121,24 @@ export async function checkConnection(input: {
     });
     if (!res.ok) throw new Error("PROVIDER_UNAVAILABLE");
     const json = await res.json();
-    const models: z.infer<typeof modelsSchema> = modelsSchema
-      .parse(json.data)
-      .map((m) => ({ id: m.id, name: m.name ?? m.id }));
+    const models = modelCatalog(json.data);
+    const evidence: ConnectionEvidence = {
+      ...((row.evidence as ConnectionEvidence) ?? {}),
+      catalog: { checkedAt: new Date().toISOString(), status: "reachable" },
+      authentication: {
+        checkedAt: new Date().toISOString(),
+        status: json.authenticated === true ? "verified" : "unknown",
+      },
+      ...(json.diagnostics ? { bridge: json.diagnostics } : {}),
+    };
     if (!models.length) throw new Error("NO_MODELS");
     await prisma.bmadConnection.update({
       where: { id: row.id },
       data: {
         models,
-        status: key ? "authenticated" : "reachable",
+        status: connectionStatus(evidence),
         checkedAt: new Date(),
+        evidence,
       },
     });
     revalidatePath("/connections");
@@ -137,7 +152,17 @@ export async function checkConnection(input: {
   } catch (e) {
     await prisma.bmadConnection.update({
       where: { id: row.id },
-      data: { status: "unavailable", checkedAt: new Date() },
+      data: {
+        status: "unavailable",
+        checkedAt: new Date(),
+        evidence: {
+          ...((row.evidence as object) ?? {}),
+          catalog: {
+            checkedAt: new Date().toISOString(),
+            status: "unavailable",
+          },
+        },
+      },
     });
     return {
       success: false,
@@ -146,9 +171,6 @@ export async function checkConnection(input: {
     };
   }
 }
-const modelsSchema = z
-  .array(z.object({ id: z.string(), name: z.string().optional() }))
-  .max(10000);
 export async function deleteConnection(input: {
   id: string;
 }): Promise<ActionResult<{ deleted: boolean }>> {
