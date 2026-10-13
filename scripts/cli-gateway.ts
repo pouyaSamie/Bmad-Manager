@@ -10,12 +10,9 @@ import crypto from "node:crypto";
 import { parse } from "smol-toml";
 import { z } from "zod";
 import { redact } from "../src/lib/output-redaction";
+import { loadBridgeToken } from "../src/lib/cli-bridge-token";
 const provider = process.argv.includes("--agy") ? "agy" : "codex";
-const token = process.env.CLI_BRIDGE_TOKEN;
-if (!token || token.length < 32)
-  throw new Error(
-    "Set CLI_BRIDGE_TOKEN to a random token of at least 32 characters.",
-  );
+const token = loadBridgeToken();
 const port = Number(
   process.env[provider === "agy" ? "AGY_GATEWAY_PORT" : "CODEX_GATEWAY_PORT"] ??
     (provider === "agy" ? 3005 : 3006),
@@ -48,7 +45,9 @@ async function binary(kind: "agy" | "codex") {
     return {
       bin:
         process.env.AGY_BIN ??
-        path.join(process.env.LOCALAPPDATA ?? "", "agy", "bin", "agy.exe"),
+        (process.platform === "win32"
+          ? path.join(process.env.LOCALAPPDATA ?? "", "agy", "bin", "agy.exe")
+          : "agy"),
       args: [],
     };
   const configured = process.env.CODEX_BIN;
@@ -58,6 +57,7 @@ async function binary(kind: "agy" | "codex") {
     !configured.endsWith(".ps1")
   )
     return { bin: configured, args: [] };
+  if (process.platform !== "win32") return { bin: "codex", args: [] };
   const candidates = [
     path.join(
       process.env.APPDATA ?? "",
@@ -254,6 +254,12 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.headers.origin) {
     res.writeHead(403).end();
+    return;
+  }
+  // Liveness only: login and model access are checked separately by discovery/chat.
+  if (req.method === "GET" && req.url === "/healthz") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", provider }));
     return;
   }
   let child: ChildProcessWithoutNullStreams | undefined;
