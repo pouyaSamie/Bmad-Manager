@@ -21,6 +21,7 @@ docs
 .turbo
 dist
 coverage
+.qa-results
 *.test.ts
 *.test.tsx
 **/__tests__/**
