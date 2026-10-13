@@ -1,16 +1,16 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+
 @plugin "@tailwindcss/typography";
 @import "highlight.js/styles/github-dark.min.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where([data-mantine-color-scheme="dark"], [data-mantine-color-scheme="dark"] *));
 
 @theme inline {
     --color-background: var(--background);
     --color-foreground: var(--foreground);
-    --font-sans: var(--font-geist-sans);
-    --font-mono: var(--font-geist-mono);
+    --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, monospace;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -423,3 +423,23 @@
     animation: none;
     mix-blend-mode: normal;
 }
+
+/* Workspace design tokens share Mantine's theme authority. */
+:root {--background:var(--mantine-color-body);--foreground:var(--mantine-color-text);--card:var(--mantine-color-body);--card-foreground:var(--mantine-color-text);--muted:var(--mantine-color-gray-0);--muted-foreground:var(--mantine-color-dimmed);--primary:var(--mantine-color-indigo-6);--border:var(--mantine-color-gray-3);}
+[data-mantine-color-scheme="dark"] {--background:var(--mantine-color-dark-8);--card:var(--mantine-color-dark-7);--foreground:var(--mantine-color-gray-1);--card-foreground:var(--mantine-color-gray-1);--muted:var(--mantine-color-dark-6);--muted-foreground:var(--mantine-color-gray-5);--border:var(--mantine-color-dark-4);}
+body {margin:0;font-family:var(--font-sans);font-size:14px;background:var(--background);color:var(--foreground);}
+.workspace-main {min-width:0;max-width:100%;}
+.workspace-main > * {min-width:0;}
+.workspace-card {border:1px solid var(--border);background:var(--card);border-radius:12px;padding:24px;}
+.workspace-muted {color:var(--muted-foreground);}
+.workflow-surface {height:calc(100dvh - 340px);min-height:420px;border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.react-flow__node {font-family:var(--font-sans);font-size:14px;}
+.react-flow__node-default {background:var(--card);color:var(--foreground);border-color:var(--border);width:220px;border-radius:12px;padding:16px;}
+@media(max-width:48em){.workspace-card {padding:16px;}.workflow-surface {height:60dvh;min-height:360px;}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important;scroll-behavior:auto!important;}}
+
+.react-flow__controls-button {width:40px;height:40px;}
+
+.theme-dark-icon {display:none;}
+[data-mantine-color-scheme="dark"] .theme-light-icon {display:none;}
+[data-mantine-color-scheme="dark"] .theme-dark-icon {display:block;}

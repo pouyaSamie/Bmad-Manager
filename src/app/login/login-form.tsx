@@ -3,23 +3,26 @@
 import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/auth-client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Github, Loader2, Mail, Workflow } from "lucide-react";
-
+  Paper,
+  Stack,
+  Title,
+  Text,
+  TextInput,
+  PasswordInput,
+  Button,
+  Alert,
+  Divider,
+} from "@mantine/core";
 interface LoginFormProps {
   githubEnabled: boolean;
   registrationEnabled: boolean;
 }
 
-export function LoginForm({ githubEnabled, registrationEnabled }: LoginFormProps) {
+export function LoginForm({
+  githubEnabled,
+  registrationEnabled,
+}: LoginFormProps) {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +66,7 @@ export function LoginForm({ githubEnabled, registrationEnabled }: LoginFormProps
           setError(
             code === 403
               ? "Registration is disabled on this server."
-              : "Unable to create the account."
+              : "Unable to create the account.",
           );
           setLoading(false);
           return;
@@ -95,105 +98,81 @@ export function LoginForm({ githubEnabled, registrationEnabled }: LoginFormProps
         : null);
 
   return (
-    <Card className="glass-card w-full max-w-sm">
-      <CardHeader className="flex flex-col items-center text-center">
-        <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-          <Workflow className="h-8 w-8" aria-hidden="true" />
+    <Paper withBorder p="xl" radius="lg" w="100%" maw={460}>
+      <Stack gap="lg">
+        <div>
+          <Text c="indigo" fw={700} mb="md">
+            BMAD MANAGER
+          </Text>
+          <Title order={2}>
+            {isSignUp ? "Create your workspace" : "Welcome back"}
+          </Title>
+          <Text c="dimmed" mt="sm">
+            Configure your AI team and design how they work together.
+          </Text>
         </div>
-        <CardTitle className="text-2xl font-bold">BmadManager</CardTitle>
-        <CardDescription>
-          {isSignUp ? "Create an account" : "Sign in to your dashboard"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {displayError && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-center text-sm text-destructive">
-            {displayError}
-          </div>
-        )}
-
-        <form onSubmit={handleEmailSubmit} className="space-y-3">
-          {isSignUp && (
-            <Input
-              placeholder="Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={loading}
-              autoComplete="name"
-            />
-          )}
-          <Input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={loading}
-            autoComplete="email"
-          />
-          <Input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={loading}
-            autoComplete={isSignUp ? "new-password" : "current-password"}
-          />
-          <Button type="submit" className="w-full" size="lg" disabled={loading}>
-            {loading ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            ) : (
-              <Mail className="mr-2 h-5 w-5" />
+        {displayError && <Alert color="red">{displayError}</Alert>}
+        <form onSubmit={handleEmailSubmit}>
+          <Stack>
+            {isSignUp && (
+              <TextInput
+                label="Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+                required
+              />
             )}
-            {isSignUp ? "Create account" : "Sign in"}
-          </Button>
+            <TextInput
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+            />
+            <PasswordInput
+              label="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete={isSignUp ? "new-password" : "current-password"}
+              required
+            />
+            <Button type="submit" loading={loading} fullWidth>
+              {isSignUp ? "Create account" : "Sign in"}
+            </Button>
+          </Stack>
         </form>
-
-        {registrationEnabled && (
-          <button
-            type="button"
-            className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setError(null);
-            }}
-            disabled={loading}
-          >
-            {isSignUp
-              ? "Already have an account? Sign in"
-              : "Don't have an account? Create one"}
-          </button>
-        )}
-
         {githubEnabled && (
           <>
-            <div className="relative flex items-center py-1">
-              <div className="flex-1 border-t border-border" />
-              <span className="mx-3 text-xs text-muted-foreground">or</span>
-              <div className="flex-1 border-t border-border" />
-            </div>
+            <Divider label="or" />
             <Button
-              variant="outline"
-              className="w-full"
-              size="lg"
-              disabled={loading}
-              onClick={() => {
-                setLoading(true);
+              variant="default"
+              onClick={() =>
                 authClient.signIn.social({
                   provider: "github",
                   callbackURL: "/",
-                });
-              }}
+                })
+              }
             >
-              {loading ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : (
-                <Github className="mr-2 h-5 w-5" />
-              )}
               Continue with GitHub
             </Button>
           </>
         )}
-      </CardContent>
-    </Card>
+        {registrationEnabled && (
+          <Button
+            variant="subtle"
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setError(null);
+            }}
+          >
+            {isSignUp
+              ? "Already have an account? Sign in"
+              : "Create an account"}
+          </Button>
+        )}
+      </Stack>
+    </Paper>
   );
 }

@@ -1,5 +1,5 @@
 import { redirect, notFound } from "next/navigation";
-import { DocsBrowser } from "@/components/docs/docs-browser";
+import { Library as DocsBrowser } from "@/components/workspace/artifacts";
 import { fetchBmadFiles } from "@/actions/repo-actions";
 import {
   getAuthenticatedUserId,
@@ -30,9 +30,7 @@ export default async function DocsPage({
       <div className="space-y-8 pb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Library</h1>
-          <p className="text-muted-foreground mt-1">
-            Browse the project files
-          </p>
+          <p className="text-muted-foreground mt-1">Browse the project files</p>
         </div>
         <div
           className="flex items-center justify-center h-64 text-muted-foreground"
@@ -46,12 +44,6 @@ export default async function DocsPage({
 
   return (
     <div className="space-y-8 pb-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Library</h1>
-        <p className="text-muted-foreground mt-1">
-          Browse the project files
-        </p>
-      </div>
       <DocsBrowser
         fileTree={result.data.fileTree}
         docsTree={result.data.docsTree}

@@ -1,6 +1,9 @@
-import { BmadControlPanel } from "@/components/bmad/bmad-control-panel";
-
-export default async function BmadControlPage({ params }: { params: Promise<{ owner: string; repo: string }> }) {
+import { redirect } from "next/navigation";
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ owner: string; repo: string }>;
+}) {
   const { owner, repo } = await params;
-  return <BmadControlPanel owner={owner} name={repo} />;
+  redirect("/repo/" + owner + "/" + repo + "/workflow");
 }

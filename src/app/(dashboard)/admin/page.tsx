@@ -22,32 +22,38 @@ export default async function AdminPage() {
   return (
     <div className="mesh-gradient min-h-full">
       <div className="space-y-8 pt-6 lg:pt-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Administration Panel
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Usage overview and user management.
-        </p>
-      </div>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Administration Panel
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Usage overview and user management.
+          </p>
+        </div>
 
-      {metricsResult.success ? (
-        <UsageMetrics
-          totalUsers={metricsResult.data.totalUsers}
-          totalRepos={metricsResult.data.totalRepos}
-          recentUsers={metricsResult.data.recentUsers}
-          activeUsersLast30d={metricsResult.data.activeUsersLast30d}
-          parsingErrorRate={metricsResult.data.parsingErrorRate}
-        />
-      ) : (
-        <AlertBanner variant="error" title={`Failed to load metrics: ${metricsResult.error}`} />
-      )}
+        {metricsResult.success ? (
+          <UsageMetrics
+            totalUsers={metricsResult.data.totalUsers}
+            totalRepos={metricsResult.data.totalRepos}
+            recentUsers={metricsResult.data.recentUsers}
+            activeUsersLast30d={metricsResult.data.activeUsersLast30d}
+            parsingErrorRate={metricsResult.data.parsingErrorRate}
+          />
+        ) : (
+          <AlertBanner
+            variant="error"
+            title={`Failed to load metrics: ${metricsResult.error}`}
+          />
+        )}
 
-      {usersResult.success ? (
-        <UsersTable users={usersResult.data} currentUserId={session.userId} />
-      ) : (
-        <AlertBanner variant="error" title={`Failed to load users: ${usersResult.error}`} />
-      )}
+        {usersResult.success ? (
+          <UsersTable users={usersResult.data} currentUserId={session.userId} />
+        ) : (
+          <AlertBanner
+            variant="error"
+            title={`Failed to load users: ${usersResult.error}`}
+          />
+        )}
       </div>
     </div>
   );

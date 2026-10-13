@@ -1,10 +1,9 @@
-import { ModelsProvidersManager } from "@/components/bmad/models-providers-manager";
-
-export default async function ModelsProvidersPage({
+import { redirect } from "next/navigation";
+export default async function Page({
   params,
 }: {
   params: Promise<{ owner: string; repo: string }>;
 }) {
   const { owner, repo } = await params;
-  return <ModelsProvidersManager owner={owner} name={repo} />;
+  redirect("/repo/" + owner + "/" + repo + "/settings");
 }
