@@ -1,4 +1,5 @@
 const ERROR_MESSAGES: Record<string, string> = {
+  NETWORK_ERROR: "The model connection failed. Check the endpoint, login, selected model, and bridge status.",
   DB_ERROR: "An error occurred. Please try again.",
   GITHUB_ERROR: "Unable to communicate with GitHub.",
   FS_ERROR: "Unable to read the file system.",

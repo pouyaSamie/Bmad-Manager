@@ -12,6 +12,8 @@ export function middleware(request: NextRequest) {
 
   if (!sessionToken) {
     if (isLoginPage) return NextResponse.next();
+    if (request.nextUrl.pathname.startsWith("/api/"))
+      return NextResponse.json({ error: "Sign in required" }, { status: 401 });
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -24,8 +26,14 @@ export function middleware(request: NextRequest) {
       request.nextUrl.searchParams.has("reset")
     ) {
       const response = NextResponse.next();
-      response.cookies.set("better-auth.session_token", "", { maxAge: 0, path: "/" });
-      response.cookies.set("__Secure-better-auth.session_token", "", { maxAge: 0, path: "/" });
+      response.cookies.set("better-auth.session_token", "", {
+        maxAge: 0,
+        path: "/",
+      });
+      response.cookies.set("__Secure-better-auth.session_token", "", {
+        maxAge: 0,
+        path: "/",
+      });
       return response;
     }
     return NextResponse.redirect(new URL("/", request.url));

@@ -30,6 +30,12 @@ describe("middleware", () => {
     expect(new URL(res.headers.get("location")!).pathname).toBe("/login");
   });
 
+  it("returns an authentication error for API clients without redirecting", () => {
+    const res = middleware(createRequest("/api/bmad/chat"));
+    expect(res.status).toBe(401);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
   it("allows unauthenticated user on /login", () => {
     const req = createRequest("/login");
     const res = middleware(req);

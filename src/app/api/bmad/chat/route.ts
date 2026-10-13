@@ -3,60 +3,259 @@ import fs from "node:fs/promises";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { getAuthenticatedSession } from "@/lib/db/helpers";
-import { getGatewayForChat } from "@/actions/bmad-control-actions";
-import { safeChild } from "@/lib/bmad-control";
-
-const requestSchema = z.object({ owner: z.string().min(1), name: z.string().min(1), agentId: z.string().min(1), conversationId: z.string().optional(), message: z.string().min(1).max(16000) });
-
-function textDelta(line: string): string {
-  if (!line.startsWith("data: ") || line === "data: [DONE]") return "";
-  try { return JSON.parse(line.slice(6)).choices?.[0]?.delta?.content ?? ""; } catch { return ""; }
-}
-
-export async function POST(request: NextRequest) {
-  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return Response.json({ error: "Invalid chat request" }, { status: 400 });
-  const session = await getAuthenticatedSession();
-  if (!session) return Response.json({ error: "Not authenticated" }, { status: 401 });
-  const repo = await prisma.repo.findFirst({ where: { userId: session.userId, owner: parsed.data.owner, name: parsed.data.name, sourceType: "local" }, select: { id: true, localPath: true } });
-  if (!repo?.localPath) return Response.json({ error: "Local project not found" }, { status: 404 });
-
-  const gateway = await getGatewayForChat(repo.id, session.userId, parsed.data.agentId);
-  if (!gateway) return Response.json({ error: "Configure a project gateway or an agent-specific provider and model before chatting" }, { status: 409 });
-  const agent = gateway.agent;
-  const conversation = parsed.data.conversationId
-    ? await prisma.bmadConversation.findFirst({ where: { id: parsed.data.conversationId, runtimeId: gateway.runtime.id } })
-    : await prisma.bmadConversation.create({ data: { runtimeId: gateway.runtime.id, agentId: agent.id, title: parsed.data.message.slice(0, 72) } });
-  if (!conversation) return Response.json({ error: "Conversation not found" }, { status: 404 });
-
-  await prisma.bmadMessage.create({ data: { conversationId: conversation.id, role: "user", content: parsed.data.message } });
-  const skill = agent.skillName ? await prisma.bmadSkill.findFirst({ where: { runtimeId: gateway.runtime.id, name: agent.skillName } }) : null;
-  const skillContent = skill ? await fs.readFile(safeChild(repo.localPath, `${skill.directory}/SKILL.md`), "utf8").catch(() => "") : "";
-  const history = await prisma.bmadMessage.findMany({ where: { conversationId: conversation.id }, orderBy: { createdAt: "asc" }, take: 40 });
-  const system = `You are ${agent.name}, ${agent.title}. ${agent.description ?? ""}\n\nConfigured persona:\n${typeof agent.persona === "string" ? agent.persona : "No additional project persona override."}\n\nAttached skill:\n${skillContent.slice(0, 24000)}\n\nYou are inside BmadManager. You may inspect and explain BMad configuration, but you cannot write files or run commands. When a change is needed, describe the exact approved operation the user should draft. Keep the configured persona.`;
-  const endpoint = `${gateway.gatewayBaseUrl.replace(/\/$/, "")}/chat/completions`;
-  const headers: Record<string, string> = { "content-type": "application/json" };
-  if (gateway.apiKey) headers.authorization = `Bearer ${gateway.apiKey}`;
-  const upstream = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify({ model: gateway.gatewayModel, stream: true, messages: [{ role: "system", content: system }, ...history.map((item) => ({ role: item.role === "assistant" ? "assistant" : "user", content: item.content }))] }) });
-  if (!upstream.ok || !upstream.body) return Response.json({ error: `Gateway request failed for ${gateway.providerLabel}` }, { status: 502 });
-
-  const decoder = new TextDecoder();
-  let answer = "";
-  const stream = new ReadableStream({
-    async start(controller) {
-      const reader = upstream.body!.getReader();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const raw = decoder.decode(value, { stream: true });
-          for (const line of raw.split("\n")) answer += textDelta(line);
-          controller.enqueue(value);
+import { getGatewayForChat } from "@/lib/model-routing";
+import { safeChild, decryptSecret } from "@/lib/bmad-control";
+import { requestHeaders } from "@/lib/providers";
+import { sseData } from "@/lib/model-stream";
+import { sanitizeError } from "@/lib/errors";
+const schema = z.object({
+  owner: z.string().min(1),
+  name: z.string().min(1),
+  agentId: z.string().min(1),
+  conversationId: z.string().optional(),
+  message: z.string().min(1).max(16000),
+  preview: z
+    .object({
+      connectionId: z.string(),
+      modelId: z.string().min(1),
+      persona: z.string().max(24000).optional(),
+      skillName: z.string().optional(),
+    })
+    .optional(),
+});
+export async function POST(req: NextRequest) {
+  const v = schema.safeParse(await req.json().catch(() => null));
+  if (!v.success)
+    return Response.json({ error: "Invalid chat request" }, { status: 400 });
+  const s = await getAuthenticatedSession();
+  if (!s) return Response.json({ error: "Sign in required" }, { status: 401 });
+  try {
+    const p = v.data;
+    const repo = await prisma.repo.findFirst({
+      where: {
+        userId: s.userId,
+        owner: p.owner,
+        name: p.name,
+        sourceType: "local",
+      },
+    });
+    if (!repo?.localPath)
+      return Response.json(
+        { error: "Local project not found" },
+        { status: 404 },
+      );
+    const route = await getGatewayForChat(repo.id, s.userId, p.agentId);
+    if (!route || !route.agent.available)
+      return Response.json({ error: "Agent unavailable" }, { status: 409 });
+    let baseUrl = route.gatewayBaseUrl,
+      model = route.gatewayModel,
+      key = route.apiKey,
+      provider = route.providerLabel,
+      connection = route.connection;
+    if (p.preview) {
+      connection = await prisma.bmadConnection.findFirst({
+        where: { id: p.preview.connectionId, userId: s.userId },
+      });
+      if (!connection)
+        return Response.json(
+          { error: "Connection not found" },
+          { status: 404 },
+        );
+      baseUrl = connection.baseUrl;
+      model = p.preview.modelId;
+      key = connection.encryptedKey
+        ? decryptSecret(connection.encryptedKey)
+        : "";
+      provider = connection.name;
+    }
+    if (!connection)
+      return Response.json(
+        { error: "Choose and verify a connection before testing this agent" },
+        { status: 409 },
+      );
+    const available = connection.models as { id: string }[] | null;
+    if (!available?.some((m) => m.id === model))
+      return Response.json(
+        { error: "Discover models and choose an available model first" },
+        { status: 409 },
+      );
+    const conversation = p.conversationId
+      ? await prisma.bmadConversation.findFirst({
+          where: {
+            id: p.conversationId,
+            runtimeId: route.runtime.id,
+            agentId: p.agentId,
+          },
+        })
+      : await prisma.bmadConversation.create({
+          data: {
+            runtimeId: route.runtime.id,
+            agentId: p.agentId,
+            title: p.message.slice(0, 72),
+          },
+        });
+    if (!conversation)
+      return Response.json(
+        { error: "Conversation not found for this agent" },
+        { status: 404 },
+      );
+    const skillName = p.preview?.skillName ?? route.agent.skillName;
+    const skill = skillName
+      ? await prisma.bmadSkill.findFirst({
+          where: {
+            runtimeId: route.runtime.id,
+            name: skillName,
+            source: { not: "missing" },
+          },
+        })
+      : null;
+    const skillContent = skill
+      ? await fs.readFile(
+          safeChild(repo.localPath, skill.directory + "/SKILL.md"),
+          "utf8",
+        )
+      : "";
+    const history = (
+      await prisma.bmadMessage.findMany({
+        where: { conversationId: conversation.id, status: "completed" },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+      })
+    ).reverse();
+    const persona =
+      p.preview?.persona ??
+      (typeof route.agent.persona === "string" ? route.agent.persona : "");
+    const system =
+      "You are " +
+      route.agent.name +
+      ", " +
+      route.agent.title +
+      ". This is a configuration test conversation. Do not run commands, write files, invoke tools, or claim to execute workflows.\nPersona: " +
+      persona +
+      "\nAttached skill for reference (execution unavailable):\n" +
+      skillContent.slice(0, 24000);
+    await prisma.bmadMessage.create({
+      data: {
+        conversationId: conversation.id,
+        role: "user",
+        content: p.message,
+      },
+    });
+    const answerRow = await prisma.bmadMessage.create({
+      data: {
+        conversationId: conversation.id,
+        role: "assistant",
+        content: "",
+        status: "streaming",
+        metadata: { provider, model, preview: !!p.preview },
+      },
+    });
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort("timeout"), 120000);
+    req.signal.addEventListener("abort", () => abort.abort("cancelled"), {
+      once: true,
+    });
+    const started = Date.now();
+    const encoder = new TextEncoder();
+    let answer = "";
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (event: Record<string, unknown>) => {
+          try {
+            controller.enqueue(
+              encoder.encode("data: " + JSON.stringify(event) + "\n\n"),
+            );
+          } catch {
+            // A disconnected client cannot receive a terminal event.
+          }
+        };
+        let status = "completed";
+        try {
+          send({
+            type: "metadata",
+            conversationId: conversation.id,
+            provider,
+            model,
+            preview: !!p.preview,
+          });
+          const upstream = await fetch(baseUrl + "/chat/completions", {
+            method: "POST",
+            headers: requestHeaders(key),
+            signal: abort.signal,
+            body: JSON.stringify({
+              model,
+              stream: true,
+              messages: [
+                { role: "system", content: system },
+                ...history.map((m) => ({ role: m.role, content: m.content })),
+                { role: "user", content: p.message },
+              ],
+            }),
+          });
+          if (!upstream.ok || !upstream.body)
+            throw new Error("PROVIDER_REQUEST_FAILED");
+          for await (const data of sseData(upstream.body)) {
+            if (data === "[DONE]") break;
+            const event = JSON.parse(data);
+            if (event.error) throw new Error("PROVIDER_STREAM_FAILED");
+            const delta = event.choices?.[0]?.delta?.content;
+            if (typeof delta === "string") {
+              answer += delta;
+              send({ type: "text", text: delta });
+            }
+          }
+          if (!answer.trim()) throw new Error("EMPTY_RESPONSE");
+          await prisma.bmadConnection.update({
+            where: { id: connection!.id },
+            data: { status: "tested", checkedAt: new Date() },
+          });
+          send({ type: "completion", latencyMs: Date.now() - started });
+        } catch (error) {
+          status =
+            abort.signal.aborted && abort.signal.reason !== "timeout"
+              ? "cancelled"
+              : "failed";
+          send({ type: "error", error: sanitizeError(error, "NETWORK_ERROR") });
+        } finally {
+          clearTimeout(timeout);
+          await prisma.bmadMessage.update({
+            where: { id: answerRow.id },
+            data: {
+              content: answer,
+              status,
+              metadata: {
+                provider,
+                model,
+                latencyMs: Date.now() - started,
+                preview: !!p.preview,
+              },
+            },
+          });
+          await prisma.bmadConversation.update({
+            where: { id: conversation.id },
+            data: { updatedAt: new Date() },
+          });
+          try {
+            controller.close();
+          } catch {}
         }
-        await prisma.bmadMessage.create({ data: { conversationId: conversation.id, role: "assistant", content: answer || "No text response received." } });
-        await prisma.bmadConversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
-      } finally { controller.close(); }
-    },
-  });
-  return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-cache", "x-bmad-conversation": conversation.id } });
+      },
+      cancel() {
+        abort.abort("cancelled");
+        clearTimeout(timeout);
+      },
+    });
+    return new Response(stream, {
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+        "x-bmad-conversation": conversation.id,
+      },
+    });
+  } catch (error) {
+    return Response.json(
+      { error: sanitizeError(error, "NETWORK_ERROR") },
+      { status: 500 },
+    );
+  }
 }
