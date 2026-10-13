@@ -29,7 +29,7 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
-import path from "node:path";
+
 import {
   runBmadInstaller,
   syncProjectBmadRuntime,
@@ -339,25 +339,13 @@ export async function deleteRepo(input: {
       return { success: false, error: "Repo not found", code: "NOT_FOUND" };
     }
 
-    let uninstalledBmad = false;
+    const uninstalledBmad = false;
 
     // If local repo and uninstallBmad requested, clean up BMAD folders from disk
-    if (parsed.data.uninstallBmad && repo.sourceType === "local" && repo.localPath) {
-      try {
-        const projectRoot = resolveLocalPath(repo.localPath);
-        const bmadDir = path.join(projectRoot, "_bmad");
-        const bmadOutputDir = path.join(projectRoot, "_bmad-output");
-        const agentsSkillsDir = path.join(projectRoot, ".agents", "skills");
-
-        await fs.rm(bmadDir, { recursive: true, force: true }).catch(() => {});
-        await fs.rm(bmadOutputDir, { recursive: true, force: true }).catch(() => {});
-        await fs.rm(agentsSkillsDir, { recursive: true, force: true }).catch(() => {});
-        uninstalledBmad = true;
-      } catch (fsErr) {
-        console.error("Failed to remove BMAD files during uninstall:", fsErr);
-      }
-    }
-
+    if(parsed.data.uninstallBmad&&repo.sourceType==='local'&&repo.localPath){
+ const runtime=await prisma.bmadProjectRuntime.upsert({where:{repoId:repo.id},create:{repoId:repo.id},update:{}});
+ await prisma.bmadOperation.create({data:{runtimeId:runtime.id,kind:'uninstall',status:'draft',createdById:userId,payload:{},preview:{summary:'Uninstall BMad and unlink project',writes:['_bmad/','_bmad-output/','.agents/skills/'],preserves:['Source code','Git repository']}}});revalidatePath('/repo/'+parsed.data.owner+'/'+parsed.data.name+'/settings');return {success:true,data:{deleted:false,uninstalledBmad:false}};
+ }
     await prisma.repo.delete({
       where: { id: repo.id },
     });
@@ -997,6 +985,7 @@ export async function importLocalFolder(input: {
       select: { id: true, owner: true, name: true, displayName: true },
     });
 
+    if(!hasBmad){const runtime=await prisma.bmadProjectRuntime.upsert({where:{repoId:repo.id},create:{repoId:repo.id},update:{}});await prisma.bmadOperation.create({data:{runtimeId:runtime.id,kind:"install",status:"draft",createdById:userId,payload:JSON.parse(JSON.stringify(parsed.data.installOptions??{})),preview:{summary:"Install BMad in this project",writes:["_bmad/",".agents/skills/"],options:JSON.parse(JSON.stringify(parsed.data.installOptions??{}))}}});}
     // Automatically initialize runtime and discover installed skills & agents
     try {
       await syncProjectBmadRuntime(repo.id, resolvedPath);
