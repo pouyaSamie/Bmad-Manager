@@ -31,7 +31,7 @@ describe("Workflow design", () => {
     });
   });
   it("allows feedback cycles but rejects forward cycles", () => {
-    const g = migrateGraph(null, agents);
+    const g = migrateGraph({ agentIds: agents.map((a) => a.id) }, agents);
     expect(() =>
       validateGraph({
         ...g,
@@ -59,7 +59,7 @@ describe("Workflow design", () => {
     ).toHaveLength(2);
   });
   it("rejects unknown, duplicate and unbounded feedback connections", () => {
-    const g = migrateGraph(null, agents);
+    const g = migrateGraph({ agentIds: agents.map((a) => a.id) }, agents);
     expect(() =>
       validateGraph({
         ...g,
@@ -80,7 +80,10 @@ describe("Workflow design", () => {
     ).toThrow("limit");
   });
   it("preserves parallel branches and positions on round trip", () => {
-    const g = migrateGraph(null, [...agents, { id: "c", slug: "ux" }]);
+    const g = migrateGraph({ agentIds: ["a", "b", "c"] }, [
+      ...agents,
+      { id: "c", slug: "ux" },
+    ]);
     g.edges = [
       { id: "1", source: "dev", target: "qa", kind: "forward" },
       { id: "2", source: "dev", target: "ux", kind: "forward" },
@@ -89,4 +92,13 @@ describe("Workflow design", () => {
   });
 });
 
-it('preserves missing legacy references as unavailable nodes',()=>{const g=migrateGraph({agentIds:['a','lost']},agents);expect(g.nodes[1].agentSlug).toBe('unavailable-lost');expect(g.edges[0].target).toBe('unavailable-lost');});
+it("preserves missing legacy references as unavailable nodes", () => {
+  const g = migrateGraph({ agentIds: ["a", "lost"] }, agents);
+  expect(g.nodes[1].agentSlug).toBe("unavailable-lost");
+  expect(g.edges[0].target).toBe("unavailable-lost");
+});
+
+it("starts a new workspace with an empty design", () => {
+  expect(migrateGraph(null, [])).toEqual({ version: 2, nodes: [], edges: [] });
+  expect(migrateGraph(null, [{ id: "a", slug: "dev" }]).nodes).toEqual([]);
+});

@@ -18,7 +18,9 @@ async function main() {
   await fs.mkdir(screenshots, { recursive: true });
   const email = process.env.QA_EMAIL ?? "testadmin@example.com",
     password = process.env.QA_PASSWORD ?? "testpassword123";
-  let projectId: string | undefined, connectionId: string | undefined;
+  let projectId: string | undefined,
+    connectionId: string | undefined,
+    emptyProjectId: string | undefined;
   const browser = await chromium.launch({
     executablePath:
       process.env.QA_BROWSER ??
@@ -31,6 +33,11 @@ async function main() {
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   const errors: string[] = [];
+  const dialogs: string[] = [];
+  page.on("dialog", async (d) => {
+    dialogs.push(d.type());
+    await d.accept();
+  });
   page.on("pageerror", (e) => errors.push(e.message));
   const server = http.createServer(async (req, res) => {
     if (req.url === "/v1/models") {
@@ -63,6 +70,7 @@ async function main() {
         await new Promise((r) => setTimeout(r, 5000));
       if (payload.messages.at(-1).content.includes("fail"))
         res.end('data: {"error":{"message":"Fixture stream failed"}}\n\n');
+      else if (payload.messages.at(-1).content.includes("truncate")) res.end();
       else res.end("data: [DONE]\n\n");
       return;
     }
@@ -73,7 +81,7 @@ async function main() {
     await page.getByRole("combobox", { name: label, exact: true }).click();
     await page.getByRole("option", { name: value, exact: true }).click();
   }
-  async function worker(id: string) {
+  async function worker(id: string, expectedStatus = "succeeded") {
     await new Promise<void>((resolve, reject) => {
       const child = spawn(
         process.execPath,
@@ -101,7 +109,8 @@ async function main() {
       );
     });
     const op = await prisma.bmadOperation.findUnique({ where: { id } });
-    if (op) assert.equal(op.status, "succeeded", op.error ?? "Worker failed");
+    if (op)
+      assert.equal(op.status, expectedStatus, op.error ?? "Worker failed");
   }
   try {
     await fs.mkdir(path.join(folder, "_bmad/custom"), { recursive: true });
@@ -124,7 +133,14 @@ async function main() {
       );
       await fs.writeFile(
         path.join(folder, ".agents/skills", skill, "customize.toml"),
-        '[agent]\nidentity="Fixture identity"\n',
+        skill === "bmad-agent-dev"
+          ? await fs.readFile(
+              path.resolve(
+                "src/lib/__tests__/fixtures/bmad-v6/dev-customize.toml",
+              ),
+              "utf8",
+            )
+          : '[agent]\nidentity="Fixture identity"\n',
       );
       await fs.writeFile(
         path.join(folder, ".agents/skills", skill, "templates/example.md"),
@@ -158,16 +174,18 @@ async function main() {
       .getByRole("textbox", { name: "Folder path", exact: true })
       .fill(folder);
     await page.getByRole("button", { name: "Continue", exact: true }).click();
-    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Import project", exact: true })
+      .waitFor();
     await page
       .getByRole("button", { name: "Import project", exact: true })
       .click();
     await page.waitForURL("**/settings");
-    await page.getByRole("heading", { name: "Project settings" }).waitFor();
     const project = await prisma.repo.findFirstOrThrow({
       where: { displayName: path.basename(folder), user: { email } },
     });
     projectId = project.id;
+    await page.getByRole("heading", { name: "Project settings" }).waitFor();
     const projectBase = "/repo/" + project.owner + "/" + project.name;
     assert.equal(
       await prisma.bmadOperation.count({
@@ -176,6 +194,35 @@ async function main() {
       0,
     );
     console.log("PASS existing installation import without installer");
+    const emptyFolder = path.join(folder, "empty-project");
+    await fs.mkdir(emptyFolder);
+    await fs.writeFile(path.join(emptyFolder, "source.ts"), "Untouched source");
+    await page.goto(base + "/");
+    await page
+      .getByRole("button", { name: "Add project", exact: true })
+      .first()
+      .click();
+    await page
+      .getByRole("textbox", { name: "Folder path", exact: true })
+      .fill(emptyFolder);
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Import project", exact: true })
+      .click();
+    await page.waitForURL("**/settings");
+    const emptyProject = await prisma.repo.findFirstOrThrow({
+      where: { displayName: "empty-project", user: { email } },
+    });
+    emptyProjectId = emptyProject.id;
+    const install = await prisma.bmadOperation.findFirstOrThrow({
+      where: { runtime: { repoId: emptyProject.id }, kind: "install" },
+    });
+    assert.equal(install.status, "draft");
+    assert.deepEqual(await fs.readdir(emptyFolder), ["source.ts"]);
+    console.log(
+      "PASS missing installation import creates only a draft and leaves files untouched",
+    );
     await page.goto(base + "/connections");
     await page
       .getByRole("button", { name: "Add connection", exact: true })
@@ -215,7 +262,17 @@ async function main() {
     await page
       .getByRole("button", { name: "Stop", exact: true })
       .waitFor({ state: "hidden" });
-    console.log("PASS catalog, assignment, streamed conversation");
+    await page
+      .getByRole("button", { name: "New conversation", exact: true })
+      .click();
+    await choose(
+      "Previous conversations",
+      "Hello. Briefly introduce your role.",
+    );
+    await page.getByText("Fixture reply", { exact: true }).waitFor();
+    console.log(
+      "PASS catalog, assignment, streamed conversation and reopened history",
+    );
     const sessionConversation = await prisma.bmadConversation.findFirstOrThrow({
       where: { runtime: { repoId: project.id } },
       orderBy: { createdAt: "desc" },
@@ -282,6 +339,20 @@ async function main() {
     console.log(
       "PASS cancellation and streaming failure preserve partial responses",
     );
+    await page
+      .getByRole("textbox", { name: "Message", exact: true })
+      .fill("truncate response");
+    await page.getByRole("button", { name: "Send test message" }).click();
+    await page
+      .getByRole("button", { name: "Stop", exact: true })
+      .waitFor({ state: "hidden" });
+    await new Promise((r) => setTimeout(r, 500));
+    const truncated = await prisma.bmadMessage.findFirstOrThrow({
+      where: { conversationId: sessionConversation.id, role: "assistant" },
+      orderBy: { createdAt: "desc" },
+    });
+    assert.equal(truncated.status, "failed");
+    console.log("PASS truncated stream cannot earn completed status");
     const realConnection = await prisma.bmadConnection.findFirst({
       where: {
         userId: project.userId,
@@ -338,6 +409,16 @@ async function main() {
     assert.equal(after.available, true);
     console.log("PASS rescan preserves agent identity and route");
     await page.goto(base + projectBase + "/workflow");
+    await page.getByText(/Start with an empty design/).waitFor();
+    for (const agent of ["Amelia", "John"]) {
+      await choose(
+        "Agent palette",
+        agent + " · " + (agent === "Amelia" ? "Developer" : "Product manager"),
+      );
+      await page
+        .getByRole("button", { name: "Add agent", exact: true })
+        .click();
+    }
     await page
       .getByRole("button", { name: "Add connection", exact: true })
       .click();
@@ -352,6 +433,18 @@ async function main() {
     await page.getByRole("button", { name: "Draft workflow change" }).click();
     await page.getByText(/Design drafted/).waitFor();
     await page.goto(base + projectBase + "/settings");
+    await fs.writeFile(
+      path.join(folder, "_bmad/custom/workflow.toml"),
+      "Changed after review",
+    );
+    await page.getByRole("button", { name: "Approve change" }).first().click();
+    await page
+      .getByText(
+        "Files changed since this draft. Create a new draft before approval.",
+        { exact: true },
+      )
+      .waitFor();
+    await fs.unlink(path.join(folder, "_bmad/custom/workflow.toml"));
     await page.getByRole("button", { name: "Approve change" }).first().click();
     await page
       .getByText("Queued for the worker. Awaiting application.", {
@@ -366,7 +459,25 @@ async function main() {
       },
       orderBy: { createdAt: "desc" },
     });
+    const lockedRoot =
+      process.platform === "win32" ? folder.toLowerCase() : folder;
+    const lockKey = (await import("node:crypto"))
+      .createHash("sha256")
+      .update(lockedRoot)
+      .digest("hex");
+    await prisma.bmadWorkerLease.create({
+      data: {
+        runtimeId: lockKey,
+        operationId: "fixture-held-" + stamp,
+        workerId: "fixture-held",
+        heartbeatAt: new Date(),
+        expiresAt: new Date(Date.now() + 60000),
+      },
+    });
+    await worker(op.id, "queued");
+    await prisma.bmadWorkerLease.delete({ where: { runtimeId: lockKey } });
     await worker(op.id);
+    console.log("PASS physical workspace lock prevents concurrent application");
     const saved = parse(
       await fs.readFile(
         path.join(folder, "_bmad/custom/workflow.toml"),
@@ -385,6 +496,15 @@ async function main() {
     await page
       .getByRole("textbox", { name: "Identity and instructions" })
       .fill("Verified fixture persona");
+    await page
+      .getByRole("button", { name: "Add menu action", exact: true })
+      .click();
+    await page
+      .getByRole("textbox", { name: "Action description", exact: true })
+      .fill("Preview action");
+    await page
+      .getByRole("button", { name: "Reset menu overrides", exact: true })
+      .click();
     await page.getByRole("button", { name: "Draft customization" }).click();
     await page.getByText(/Customization drafted/).waitFor();
     await page.keyboard.press("Escape");
@@ -457,7 +577,68 @@ async function main() {
       "Preserved resource",
     );
     console.log("PASS managed clone preserves supporting resources");
+    const abandoned = await prisma.bmadOperation.create({
+      data: {
+        runtimeId: before.runtimeId,
+        kind: "write_override",
+        status: "running",
+        createdById: project.userId,
+        payload: {
+          path: "_bmad/custom/abandoned.toml",
+          content: '[agent]\nidentity="Must not run"',
+        },
+        startedAt: new Date(Date.now() - 120000),
+      },
+    });
+    await prisma.bmadWorkerLease.create({
+      data: {
+        runtimeId: lockKey,
+        operationId: abandoned.id,
+        workerId: "fixture-abandoned",
+        heartbeatAt: new Date(Date.now() - 120000),
+        expiresAt: new Date(Date.now() - 60000),
+      },
+    });
+    await worker(abandoned.id, "failed");
+    assert.equal(
+      await prisma.bmadWorkerLease.count({
+        where: { operationId: abandoned.id },
+      }),
+      1,
+    );
+    assert.equal(
+      await fs
+        .stat(path.join(folder, "_bmad/custom/abandoned.toml"))
+        .then(() => true)
+        .catch(() => false),
+      false,
+    );
+    await page.goto(base + projectBase + "/settings");
+    await page
+      .getByRole("button", {
+        name: "Release abandoned project lock",
+        exact: true,
+      })
+      .click();
+    await page.getByText(/Project lock released/).waitFor();
+    assert.equal(
+      await prisma.bmadWorkerLease.count({
+        where: { operationId: abandoned.id },
+      }),
+      0,
+    );
+    console.log(
+      "PASS abandoned operation is quarantined, never replayed, and released after review",
+    );
     const checks = [];
+    await page.goto(base + "/diagnostics");
+    await page
+      .getByRole("heading", { name: "Diagnostics", exact: true })
+      .waitFor();
+    await page.goto(base + projectBase);
+    await page
+      .getByRole("heading", { name: "Project setup", exact: true })
+      .waitFor();
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({ width, height: 1000 });
       for (const theme of ["light", "dark"]) {
@@ -484,6 +665,26 @@ async function main() {
               section + "-" + width + "-" + theme + ".png",
             ),
           });
+        }
+      }
+    }
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const theme of ["light", "dark"]) {
+        await page.evaluate(
+          (t) => localStorage.setItem("mantine-color-scheme-value", t),
+          theme,
+        );
+        for (const route of ["/connections", "/diagnostics", projectBase]) {
+          await page.goto(base + route);
+          await page.getByRole("heading", { level: 1 }).first().waitFor();
+          await page.waitForTimeout(300);
+          const d = await page.evaluate(() => ({
+            width: innerWidth,
+            scroll: document.documentElement.scrollWidth,
+          }));
+          assert.ok(d.scroll <= d.width + 1, "Overflow " + route + " " + width);
+          checks.push({ width, theme, section: route });
         }
       }
     }
@@ -540,6 +741,8 @@ async function main() {
   } finally {
     await browser.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (emptyProjectId)
+      await prisma.repo.deleteMany({ where: { id: emptyProjectId } });
     if (projectId) await prisma.repo.deleteMany({ where: { id: projectId } });
     if (connectionId)
       await prisma.bmadConnection.deleteMany({ where: { id: connectionId } });

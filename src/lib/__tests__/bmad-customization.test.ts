@@ -45,3 +45,26 @@ it("resolves native defaults and personal overrides without editing vendor files
     ),
   ).toBe("Developer\nPersonal\nVerify");
 });
+
+it("appends mixed code/id arrays and arrays whose base is not uniformly keyed", () => {
+  expect(
+    mergeCustomization(
+      { menu: [{ code: "A", text: "base" }] },
+      {
+        menu: [
+          { code: "A", text: "new" },
+          { id: "B", text: "mixed" },
+        ],
+      },
+    ).menu,
+  ).toHaveLength(3);
+  expect(
+    mergeCustomization(
+      { menu: [{ text: "unkeyed" }] },
+      { menu: [{ code: "A", text: "new" }] },
+    ).menu,
+  ).toHaveLength(2);
+  expect(
+    mergeCustomization({ menu: [{ code: "A" }] }, { menu: [] }).menu,
+  ).toEqual([{ code: "A" }]);
+});

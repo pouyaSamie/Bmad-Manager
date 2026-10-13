@@ -129,25 +129,39 @@ describe("getBmadConfig", () => {
 
 describe("isPathOutsideNestedOutput", () => {
   it("returns false for a single-segment outputDir (no nesting concern)", () => {
-    expect(isPathOutsideNestedOutput("_bmad-output/file.md", "_bmad-output")).toBe(false);
+    expect(
+      isPathOutsideNestedOutput("_bmad-output/file.md", "_bmad-output"),
+    ).toBe(false);
     // Even a path with the same top but technically outside has nothing
     // nested to escape from — the provider's own whitelist is the boundary.
     expect(isPathOutsideNestedOutput("foo/x.md", "_bmad-output")).toBe(false);
   });
 
   it("allows reads under the configured nested outputDir", () => {
-    expect(isPathOutsideNestedOutput("custom/out/foo.md", "custom/out")).toBe(false);
-    expect(isPathOutsideNestedOutput("custom/out/sub/bar.md", "custom/out")).toBe(false);
+    expect(isPathOutsideNestedOutput("custom/out/foo.md", "custom/out")).toBe(
+      false,
+    );
+    expect(
+      isPathOutsideNestedOutput("custom/out/sub/bar.md", "custom/out"),
+    ).toBe(false);
   });
 
   it("denies sibling reads under the same top segment", () => {
-    expect(isPathOutsideNestedOutput("custom/secret.txt", "custom/out")).toBe(true);
-    expect(isPathOutsideNestedOutput("custom/other/foo.md", "custom/out")).toBe(true);
+    expect(isPathOutsideNestedOutput("custom/secret.txt", "custom/out")).toBe(
+      true,
+    );
+    expect(isPathOutsideNestedOutput("custom/other/foo.md", "custom/out")).toBe(
+      true,
+    );
   });
 
   it("does not flag paths under unrelated top segments", () => {
-    expect(isPathOutsideNestedOutput("_bmad/core/config.yaml", "custom/out")).toBe(false);
-    expect(isPathOutsideNestedOutput("docs/readme.md", "custom/out")).toBe(false);
+    expect(
+      isPathOutsideNestedOutput("_bmad/core/config.yaml", "custom/out"),
+    ).toBe(false);
+    expect(isPathOutsideNestedOutput("docs/readme.md", "custom/out")).toBe(
+      false,
+    );
   });
 
   it("denies the bare top segment itself when nested output is configured", () => {
@@ -157,7 +171,12 @@ describe("isPathOutsideNestedOutput", () => {
 
   it("treats outputDir with the prefix exactly as outputDir's name (not a substring)", () => {
     // "custom/output-something" should NOT be considered under "custom/out"
-    expect(isPathOutsideNestedOutput("custom/output-something/file.md", "custom/out")).toBe(true);
+    expect(
+      isPathOutsideNestedOutput(
+        "custom/output-something/file.md",
+        "custom/out",
+      ),
+    ).toBe(true);
   });
 });
 
@@ -204,3 +223,27 @@ icon = "👑"
   });
 });
 
+it("resolves all TOML layers and active initiative output", async () => {
+  const files = {
+    "_bmad/config.toml":
+      '[core]\noutput_folder="output"\nactive_initiative="base"',
+    "_bmad/config.user.toml": '[core]\nactive_initiative="personal"',
+    "_bmad/custom/config.toml": '[core]\noutput_folder="team/output"',
+    "_bmad/custom/config.user.toml": '[core]\nactive_initiative="current"',
+  };
+  expect(await getBmadConfig(makeProvider(files), Object.keys(files))).toEqual({
+    outputDir: "team/output/current",
+  });
+});
+it("parses multiline and personal roster overrides with real TOML semantics", () => {
+  expect(
+    parseBmadAgents(
+      '[agents.dev]\nname="Amelia"\ntitle="""Senior\nDeveloper"""',
+      '[agents.dev]\nicon="D"',
+      '[agents.dev]\nname="User"',
+      '[agents.dev]\nname="Personal"',
+    ),
+  ).toEqual([
+    { slug: "dev", name: "Personal", title: "Senior\nDeveloper", icon: "D" },
+  ]);
+});
